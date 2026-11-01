@@ -1,0 +1,25 @@
+#cloud-config
+users:
+ - name: egoadmin
+ - name: ibm_monitoring
+write_files:
+ - path: /opt/symphony-deployment-scripts/linux-worker-deployment.yaml.gz
+   encoding: b64
+   content: "${linux_worker_deployment_content}"
+ - path: /opt/symphony-deployment-scripts/ego.conf.gz
+   encoding: b64
+   content: "${ego_conf_content}"
+ - path: /opt/symphony-deployment-scripts/linux-worker-deployment-env.json.gz
+   encoding: b64
+   content: "${linux_worker_deployment_env_content}"
+ - path: /opt/symphony-deployment-scripts/cacert.pem.gz
+   encoding: b64
+   content: "${cacert_pem_content}"
+ - path: /opt/symphony-deployment-scripts/linux-worker-postdeployment.yaml.gz
+   encoding: b64
+   content: "${linux_worker_postdeployment_content}" 
+bootcmd:
+ - for cpunum in $(cat /sys/devices/system/cpu/cpu*/topology/thread_siblings_list | cut -s -d- -f2- | tr ',' '\n' | sort -un); do echo 0 > /sys/devices/system/cpu/cpu$cpunum/online; done
+runcmd:
+ - for zipped_file in /opt/symphony-deployment-scripts/*.gz; do gunzip $zipped_file; done
+ - cd /opt/symphony-deployment-scripts && ansible-playbook -vvv -i localhost -e @linux-worker-deployment-env.json  linux-worker-deployment.yaml linux-worker-postdeployment.yaml

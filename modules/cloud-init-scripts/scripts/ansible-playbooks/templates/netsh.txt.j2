@@ -1,0 +1,2 @@
+interface ipv4 set subinterface "Ethernet" mtu=9000 store=persistent{%if ad_dns_server != "" %}
+interface ip set dns "Ethernet" static {{ad_dns_server}}{% endif %}

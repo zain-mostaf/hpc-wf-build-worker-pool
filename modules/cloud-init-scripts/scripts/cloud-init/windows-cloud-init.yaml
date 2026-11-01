@@ -1,0 +1,48 @@
+Content-Type: multipart/mixed; boundary="===============1598784645116016685=="
+MIME-Version: 1.0
+
+--===============1598784645116016685==
+Content-Type: text/cloud-config;charset="us-ascii"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+Content-Disposition: attachment; filename="cloud-config"
+
+
+users:
+ - name: ibm_monitoring
+write_files:
+ - path: c:\symphony-deployment-scripts\gunzip.ps1
+   encoding: b64
+   content: "${gunzip_content}" 
+ - path: c:\symphony-deployment-scripts\windows-worker-deployment.ps1.gz
+   encoding: b64
+   content: "${windows_worker_deployment_content}"
+ - path: c:\symphony-deployment-scripts\ego.conf.gz
+   encoding: b64
+   content: "${ego_conf_content}"
+ - path: c:\symphony-deployment-scripts\cacert.pem.gz
+   encoding: b64
+   content: "${cacert_pem_content}"
+ - path: c:\symphony-deployment-scripts\windows-worker-postdeployment.ps1.gz
+   encoding: b64
+   content: "${windows_worker_postdeployment_content}"
+ - path: c:\symphony-deployment-scripts\netsh.txt
+   encoding: b64
+   content: "${windows_netsh_content}"
+
+--===============1598784645116016685==
+Content-Type: text/x-shellscript; charset="us-ascii"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+Content-Disposition: attachment; filename="shell-userdata"
+
+#ps1_sysnative
+
+cd c:\symphony-deployment-scripts
+. c:\symphony-deployment-scripts\gunzip.ps1
+DeGZip-File c:\symphony-deployment-scripts\windows-worker-deployment.ps1.gz
+DeGZip-File c:\symphony-deployment-scripts\ego.conf.gz
+DeGZip-File c:\symphony-deployment-scripts\cacert.pem.gz
+DeGZip-File c:\symphony-deployment-scripts\windows-worker-postdeployment.ps1.gz
+. c:\symphony-deployment-scripts\windows-worker-deployment.ps1
+Deploy-Worker ${deploy_worker_arguments}

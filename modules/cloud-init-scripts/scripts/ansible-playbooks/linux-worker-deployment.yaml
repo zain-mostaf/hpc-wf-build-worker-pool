@@ -1,0 +1,130 @@
+##
+# Copyright (C) IBM Inc. - All Rights Reserved
+# 
+# This source code is protected under international copyright law.  All rights
+# reserved and protected by the copyright holders.
+# This file is confidential and only available to authorized individuals with the
+# permission of the copyright holders.  If you encounter this file and do not have
+# permission, please contact the copyright holders and delete this file.
+# 
+# This software is provided as-is, without warranties of any kind. 
+##
+
+---
+- name: Linux worker deployment playbook
+  hosts: localhost
+  vars:
+     EGO_TOP: /opt/ibm/spectrumcomputing
+     CLUSTERADMIN: egoadmin
+  tasks:
+  - name: Remove old deployment scripts if it exists
+    file: 
+       path: /opt/symphony-scripts
+       state: absent
+  - name: Add search domain and dnsmasq IP to /etc/resolv.conf
+    lineinfile:
+       path: /etc/resolv.conf
+       line: "{{ item }}"
+       state: present
+       insertbefore: BOF
+    with_items:
+       - nameserver 127.0.0.1
+       - search {{ cluster_domain }}
+       - options single-request-reopen
+  - name: Configure mut9000 at interface level and PEERDNS to avoid dnsmasq IP address overwrite
+    lineinfile: 
+       path: /etc/sysconfig/network-scripts/ifcfg-eth0
+       regexp: "^{{ item.property }}="
+       line: "{{ item.property }}={{ item.value }}"
+       state: present
+       insertafter: EOF
+    with_items:
+       - { property: "MTU" , value: 9000}
+       - { property: "NM_CONTROLLED", value: "no"}
+       - { property: "PEERDNS", value: "no"}
+  - name: Restart networking service
+    systemd:
+       service: network
+       state: restarted
+    ignore_errors: True
+  - name: Disable Intel Hyper-Threading Technology
+    shell: | 
+      for vcpu in `cat /sys/devices/system/cpu/cpu*/topology/thread_siblings_list | cut -s -d- -f2 | cut -d- -f2 | uniq`; do
+          echo 0 > /sys/devices/system/cpu/cpu$vcpu/online
+      done
+#   - name: Copy Symphony Grid Manager public key to /root/.ssh
+  - name: Copy ego.conf to /opt/ibm/spectrumcomputing/kernel/conf
+    copy: 
+      src: "/opt/symphony-deployment-scripts/ego.conf"
+      dest: "/opt/ibm/spectrumcomputing/kernel/conf/ego.conf"
+      owner: egoadmin
+      mode: '0644'
+  - name: Copy cacert.pem to /opt/ibm/spectrumcomputing/wlp/usr/shared/resources/security
+    copy: 
+      src: "/opt/symphony-deployment-scripts/cacert.pem"
+      dest: "/opt/ibm/spectrumcomputing/wlp/usr/shared/resources/security/cacert.pem"
+      owner: egoadmin
+      mode: '0644'
+    when: "{{ copy_ssl_cacert == 'true' }}"
+  - name: Add property net.ipv4.tcp_max_syn_backlog in /etc/sysctl.conf
+    lineinfile:
+      path:  /etc/sysctl.conf
+      line: net.ipv4.tcp_max_syn_backlog=65536
+      state: present
+  - name: Set worker attributes (if they are defined)
+    shell : |
+      source {{EGO_TOP}}/profile.platform
+       egosetsudoers.sh
+       egosetrc.sh
+       su {{CLUSTERADMIN}} -c 'egoconfig addresourceattr "{{ worker_attributes }}"'
+    when: worker_attributes is defined and worker_attributes != ""
+  - name: Join host to Spectrum Symphony
+    shell: |
+       source {{EGO_TOP}}/profile.platform
+       egosetsudoers.sh
+       egosetrc.sh
+       su {{CLUSTERADMIN}} -c 'egoconfig join {{ego_primary_host}} -f'
+  - name: Start ego service
+    systemd: 
+       name: ego
+       state: started
+       enabled: yes
+  - name: Wait resource online (2m) and restart service
+    shell: |
+      P=`echo {{symphony_password}}|base64 -d`
+      U=Admin
+      source {{EGO_TOP}}/profile.platform
+      NUM_ATTEMPTS=0
+      while [ $NUM_ATTEMPTS -le 24 ]
+      do
+          egosh user logon -u $U -x $P
+          WORKER_IN_LIST=`egosh resource list -ll | grep $HOSTNAME | cut -d '"' -f2`
+          if [ -n "$WORKER_IN_LIST" ]
+          then
+              exit 0
+          fi
+          NUM_ATTEMPTS=$(( NUM_ATTEMPTS + 1 ))
+          sleep 5
+      done
+      systemctl restart ego
+  - name: Wait resource online (2m) and close it
+    async: 120
+    poll: 5
+    when: "{{ symphony_closed_resource == True }}"
+    shell: |
+      P=`echo {{symphony_password}}|base64 -d`
+      U=Admin
+      source {{EGO_TOP}}/profile.platform
+      while true
+      do
+          egosh user logon -u $U -x $P
+          WORKER_IN_LIST=`egosh resource list -ll | grep $HOSTNAME | cut -d '"' -f2`
+          if [ -n "$WORKER_IN_LIST" ]
+          then
+              egosh resource close -reclaim $WORKER_IN_LIST
+              exit 0
+          fi
+
+          sleep 5
+      done
+    

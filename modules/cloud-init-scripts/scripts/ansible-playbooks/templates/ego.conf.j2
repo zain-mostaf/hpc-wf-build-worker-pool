@@ -1,0 +1,81 @@
+# EGO kernel parameters configuration file
+# 
+
+# EGO master candidate host
+EGO_MASTER_LIST="{{ ego_primary_host }} {{ego_secondary_host}}"
+
+# EGO daemon port number
+EGO_LIM_PORT={{ ego_base_port }}
+EGO_KD_PORT={{ ego_base_port + 1}}
+EGO_PEM_PORT={{ego_base_port + 2}}
+EGO_SNMP_PORT={{ego_base_port + 14}}
+{% if ego_ssl_setup == "true" %}
+### SSL Configuration
+EGO_TRANSPORT_SECURITY=SSL
+EGO_KD_TS_PORT={{ego_ssl_port}}
+#EGO_PEM_TRANSPORT_SECURITY=SSL
+#EGO_KD_PEM_TS_PORT=27821
+#EGO_PEM_TS_PORT=27822
+
+### END SSL Configuration{% endif %}
+
+# EGO working and logging directory
+EGO_WORKDIR={% if worker_os == "windows" %}"{% endif %}{{ EGO_TOP }}{{ os_delim }}kernel{{ os_delim }}work{% if worker_os == "windows" %}"{% endif %}
+EGO_LOGDIR={% if worker_os == "windows" %}"{% endif %}{{ EGO_TOP }}{{ os_delim }}kernel{{ os_delim }}log{% if worker_os == "windows" %}"{% endif %}
+
+# EGO log mask
+EGO_LOG_MASK=LOG_NOTICE
+
+# EGO service directory
+EGO_ESRVDIR={% if worker_os == "windows" %}"{% endif %}{{ EGO_TOP }}{{ os_delim }}eservice{% if worker_os == "windows" %}"{% endif %}
+
+# EGO security configuration
+EGO_SEC_PLUGIN=sec_ego_default
+EGO_SEC_CONF={% if worker_os == "windows" %}"{% endif %}{{ EGO_TOP }}{{ os_delim }}kernel{{ os_delim }}conf{% if worker_os == "windows" %}"{% endif %}
+
+# EGO event configuration
+#EGO_EVENT_MASK=LOG_INFO
+#EGO_EVENT_PLUGIN=eventplugin_snmp[SINK=host,MIBDIRS={{ EGO_TOP }}{{ os_delim }}kernel{{ os_delim }}conf{{ os_delim }}mibs]
+
+# EGO audit log configuration
+EGO_AUDIT_LOG=N
+EGO_AUDIT_LOGDIR={% if worker_os == "windows" %}"{% endif %}{{ EGO_TOP }}{{ os_delim }}audits{% if worker_os == "windows" %}"{%endif%}
+EGO_AUDIT_LOGMASK=LOG_INFO
+
+# Parameters related to dynamic adding/removing host
+EGO_GET_CONF=LIM
+EGO_DYNAMIC_HOST_WAIT_TIME=30
+
+EGO_ENTITLEMENT_FILE={% if worker_os == "windows" %}"{% endif %}{{ EGO_TOP }}{{ os_delim }}kernel{{ os_delim }}conf{{ os_delim }}platform.entitlement{% if worker_os == "windows" %}"{%endif%}
+
+# EGO resource allocation policy configuration
+EGO_DISTRIBUTION_INTERVAL=1
+EGO_ADJUST_SHARE_TO_WORKLOAD=Y
+EGO_RECLAIM_FROM_SIBLINGS=Y
+EGO_RBAC_ALLOW_SELFASSIGNMENT=Y
+
+# Parameters for SSL
+#EGO_DEFAULT_TS_PARAMS="SSL[CERTIFICATE={{ EGO_TOP }}{{ os_delim }}wlp{{ os_delim }}usr{{ os_delim }}shared{{ os_delim }}resources{{ os_delim }}security{{ os_delim }}user.pem,CIPHER=AES256-GCM-SHA384,PRIVATE_KEY={{ EGO_TOP }}{{ os_delim }}wlp{{ os_delim }}usr{{ os_delim }}shared{{ os_delim }}resources{{ os_delim }}security{{ os_delim }}user.key]"
+EGO_CLIENT_TS_PARAMS="SSL[CIPHER=AES256-GCM-SHA384,CAFILE={{ EGO_TOP }}{{ os_delim }}wlp{{ os_delim }}usr{{ os_delim }}shared{{ os_delim }}resources{{ os_delim }}security{{ os_delim }}cacert.pem]"
+
+# Parameter for host software
+EGO_COMPONENTS_COLLECTION=Y
+EGO_CONSUMER_PRIORITY_DEFAULT=10000
+
+# Parameter for activity level credential
+EGO_ACTIVITY_LEVEL_CREDENTIALS=enable_and_use_lifetime
+EGO_VERSION=4.0
+# Parameters related to dynamic adding{{ os_delim }}removing host
+EGO_DYNAMIC_HOST_TIMEOUT=5M
+# Parameters related to the preferred subnet 10.*
+EGO_PREFERRED_IP_MASK=10.0.0.0/8
+# Setup SSH for cluster start/stop
+{% if worker_os == "linux" %}EGO_RSH="ssh -o 'PasswordAuthentication no' -o 'StrictHostKeyChecking no'"{% endif %}
+EGO_RESOURCE_UPDATE_INTERVAL=1
+EGO_ENABLE_RG_UPDATE_MEMBERSHIP=Y
+EGO_RG_UPDATE_MEMBERSHIP_INTERVAL=10
+EGO_LIM_IGNORE_CHECKSUM=Y
+{% if worker_os == "windows" %}EGO_LOCAL_RESOURCES="[type NTX64]{% if worker_attributes != "" %}{{ worker_attributes }}{% endif %}"{% endif %}
+{% if ego_additional_parameters is defined and ego_additional_parameters != "" %}
+{{ ego_additional_parameters }}
+{% endif %}
