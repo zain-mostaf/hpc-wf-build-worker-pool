@@ -108,9 +108,9 @@ locals {
             "-BasePort ${local.template_data.ego_base_port}",
             "-SymphonyPass ${local.template_data.symphony_password}",
             "-SSLPort ${local.template_data.ego_ssl_setup == "true" ? local.template_data.ego_ssl_port : "NO_SSL"}",
-            "-SmbSharePath '${var.smb_share_path}'",
-            "-SmbDriveLetter '${var.smb_drive_letter}'",
-            "-SmbUser '${var.smb_user}'",
+            "-SmbSharePath '${replace(var.smb_share_path, "'", "''")}'",
+            "-SmbDriveLetter '${replace(var.smb_drive_letter, "'", "''")}'",
+            "-SmbUser '${replace(var.smb_user, "'", "''")}'",
             "-SmbPassword '${base64encode(var.smb_password)}'",
             "-ClosedResource ${local.template_data.symphony_closed_resource}",
             "-NoStartSymphonyConfig ${local.template_data.no_start_symphony_config}"
