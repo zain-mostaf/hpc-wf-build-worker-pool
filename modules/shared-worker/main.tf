@@ -47,7 +47,7 @@ resource "ibm_is_virtual_network_interface" "worker" {
   resource_group            = local.resource_group_id
   allow_ip_spoofing         = false
   enable_infrastructure_nat = true
-  auto_delete               = true
+  auto_delete               = false
 
   primary_ip {
     address     = each.key
