@@ -25,7 +25,11 @@ symphony_subnet_id             = ""
 symphony_instance_profile      = ""
 symphony_instance_image_id     = ""   # the Windows image name or ID
 security_groups                = []
-ego_ssl_cacert                 = ""
+ego_ssl_cacert                 = <<-EOT
+-----BEGIN CERTIFICATE-----
+<paste the content of cacert.pem here, all certificates in the file>
+-----END CERTIFICATE-----
+EOT
 symphony_post_deployment_tasks = ""
 worker_attributes              = {}
 skip_symphony_config           = false
