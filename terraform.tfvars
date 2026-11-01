@@ -9,18 +9,12 @@ worker_pool_size                = 10                         # maximum 512
 # --- Worker pool ---
 worker_pool_type            = "shared"
 worker_pool_os              = "windows"
-worker_pool_prefix          = ""      # optional. Empty gives <cluster_prefix>-wk-NNNN when ad_domain is set
+worker_pool_prefix          = "wk"    # optional. Gives <cluster_prefix>-wk-NNNN (empty gives <cluster_prefix>-worker-NNNN)
 worker_pool_start_at_number = 1
 
 # --- Naming / grid managers ---
 cluster_prefix      = "wdc1wf"        # worker naming only (gives wdc1wf-wk-0001). Grid managers use the parent workspace cluster_prefix (wdcaz1)
 grid_manager_prefix = "wf-grid-man"   # gives wdcaz1-wf-grid-man-01, -02, -03
-
-# --- Active Directory / DNS ---
-ad_domain        = "wf.ibmcloud"                 # domain the worker joins
-ad_dns_zone      = "common.wf.ibmcloud"          # AD DNS zone, added to the search suffix list
-ad_join_user     = "administrator@wf.ibmcloud"   # UPN format. Alternative: "WF\\administrator"
-ad_join_password = "<administrator-password>"    # better as a sensitive Schematics variable
 
 # --- Symphony ports (omit to read them from the parent workspace symphony_cluster_info) ---
 ego_base_port = 7869

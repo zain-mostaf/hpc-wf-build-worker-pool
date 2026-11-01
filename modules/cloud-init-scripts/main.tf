@@ -49,11 +49,6 @@ locals {
       no_start_symphony_config = var.skip_symphony_config
    }
 
-   // Active Directory Information (Windows only)
-   ad_domain = try(var.ad_info.ad_domain, "")
-   ad_dns_zone = try(var.ad_info.ad_dns_zone, "")
-   ad_join_user = try(var.ad_info.ad_join_user, "")
-   ad_join_password = try(var.ad_info.ad_join_password, "")
 }
 
 // ego.conf generation
@@ -112,10 +107,6 @@ locals {
             "-DNSSuffix \"${local.cluster_domain}\"",
             "-BasePort ${local.template_data.ego_base_port}",
             "-SymphonyPass ${local.template_data.symphony_password}",
-            "-DomainName \"${local.ad_domain}\"",
-            "-ADDNSZone \"${local.ad_dns_zone}\"",
-            "-JoinUser \"${local.ad_join_user}\"",
-            "-JoinUserPassword \"${base64encode(local.ad_join_password)}\"",
             "-SSLPort ${local.template_data.ego_ssl_setup == "true" ? local.template_data.ego_ssl_port : "NO_SSL"}",
             "-ClosedResource ${local.template_data.symphony_closed_resource}",
             "-NoStartSymphonyConfig ${local.template_data.no_start_symphony_config}"

@@ -90,29 +90,6 @@ Function Modify-ComputerName {
 }
 
 <#
-####################################################################
-## Join a machine into an AD Domain
-###################################################################
-#>
-Function Join-Ad-Domain {
-    [CmdletBinding()]
-       param (
-        [Parameter(Mandatory = $true)]
-            [string]$DomainName, # Domain name to join
-        [Parameter(Mandatory = $false)]
-            [string]$JoinUser,  # Domain user to join machines into a domain
-        [Parameter(Mandatory = $false)]
-            [string]$JoinUserPassword # Password of the join user
-       )
-   
-
-    $password = ConvertTo-SecureString $JoinUserPassword -AsPlainText -Force
-    $Cred = New-Object System.Management.Automation.PSCredential ($JoinUser, $password)
-    Add-Computer -DomainName $DomainName -Credential $Cred -Force
-
-}
-
-<#
 ########################################################################
 # Login and close resource
 ########################################################################
@@ -148,7 +125,6 @@ Function Close-Resource {
 ## Deploy-Worker -MasterList "<masterList>" -ComputerName "<workerName>" 
 ##    -DNSSuffix "<DNSSuffix>" -BasePort "<BasePort>" -SymphonyPass <Password>
 ##    -ScaleManagerServer <Scale_Manager> -ClusterID <clusterId> 
-##    -DomainName "wf.ibmcloud" -ADDNSZone "common.wf.ibmcloud" -JoinUser <user> -JoinUserPassword <password>
 #################################################################
 #>
 
@@ -158,7 +134,7 @@ Function Deploy-Worker {
         [Parameter(Mandatory = $true)]
             [string]$MasterList, # space-delimited FQDNs for the primary and secondary masters
         [Parameter(Mandatory = $true)]
-            [string]$DNSSuffix,  # DNS Zone name (us-east-1.eqt.citi.ibmcloud)
+            [string]$DNSSuffix,  # DNS search suffix(es), comma-separated (ex: us-east-1.wf.ibmcloud)
         [Parameter(Mandatory = $true)]
             [string]$ComputerName, # FQDN of this computer
         [Parameter(Mandatory = $true)]
@@ -172,14 +148,6 @@ Function Deploy-Worker {
         [Parameter(Mandatory = $false)]
             [string]$ClusterID, ## Only required for SSL. Cluster ID used in the GPFS file system (i.e. citi-wdcaz1)
         [Parameter(Mandatory = $false)]
-            [string]$DomainName, # Domain name to join
-        [Parameter(Mandatory = $false)]
-            [string]$ADDNSZone, # IBM Cloud DNS zone where the AD servers are registered (added to DNS search list)
-        [Parameter(Mandatory = $false)]
-            [string]$JoinUser,  # Domain user to join machines into a domain
-        [Parameter(Mandatory = $false)]
-            [string]$JoinUserPassword, # Password of the join user
-        [Parameter(Mandatory = $false)]
             [string]$ClosedResource,   # Checks if resource should be closed
         [Parameter(Mandatory = $false)]
             [string]$NoStartSymphonyConfig  # If this variable is true, Symphony setup will be skipped and cloud-init script will return 0
@@ -191,8 +159,6 @@ Function Deploy-Worker {
     $CACertLocation = "C:\Program Files\IBM\SpectrumComputing\wlp\usr\shared\resources\security\cacert.pem"
 
     $DecodedSymphonyPass=[System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($SymphonyPass))
-    $DecodedJoinUserPass=[System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($JoinUserPassword))
-
     ##### Set Ehternet interface MTU to 9000
     Set-NetAdapterAdvancedProperty -Name * -RegistryKeyword *JumboPacket -Registryvalue 9014
     netsh -f c:\symphony-deployment-scripts\netsh.txt
@@ -204,24 +170,8 @@ Function Deploy-Worker {
         exit 1003
     } else {
         Write-Log -Level Info "(Deploy-Worker) Computer Name is $ComputerName, executing the remaining logic after the reboot"
-
-        if (![String]::IsNullOrWhiteSpace($DomainName)) {
-            Write-Log -Level Info "(Deploy-Worker) Checking if this machine is part of domain"
-            $partOfDomain=(Get-WmiObject -Class Win32_ComputerSystem).PartOfDomain
-
-            if ($partOfDomain -eq $false) {
-                Join-Ad-Domain -DomainName $DomainName -JoinUser $JoinUser -JoinUserPassword $DecodedJoinUserPass
-                Write-Log -Level Info "(Deploy-Worker) Machine added to domain $DomainName, restart and execute the script again (exit 1003)"
-                exit 1003
-            } else {
-                Write-Log -Level Info "(Deploy-Worker) Machine is part of domain $DomainName"
-            }
-        }
-        ### Search list: worker DNS zone, then the AD DNS zone (if informed and different)
-        $SuffixSearchList = @($DNSSuffix)
-        if (![String]::IsNullOrWhiteSpace($ADDNSZone) -and $ADDNSZone -ne $DNSSuffix) {
-            $SuffixSearchList += $ADDNSZone
-        }
+        ### Search list: DNSSuffix is a comma-separated list of DNS search suffixes
+        $SuffixSearchList = @($DNSSuffix -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' })
         Write-Log -Level Info "(Deploy-Worker) Adding DNS search suffixes: $($SuffixSearchList -join ', ')"
         Set-DnsClientGlobalSetting -SuffixSearchList $SuffixSearchList
 

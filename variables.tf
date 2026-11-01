@@ -125,26 +125,6 @@ variable security_groups {
     description = "(Optional) List of security group names to be added into this worker. If not informed, the list will be imported from the HPC management offering."
 }
 
-variable ad_domain {
-    default = ""
-    description = "(Optional) Active Directory domain used to join Windows workers (ex: wf.ibmcloud). If not informed, the domain declared in HPC Management offering will be used."
-}
-
-variable ad_dns_zone {
-    default = ""
-    description = "(Optional) IBM Cloud DNS zone where the Active Directory servers are registered (ex: common.wf.ibmcloud). It is added to the DNS search suffix list of Windows workers, after the worker pool DNS zone."
-}
-
-variable ad_join_user {
-    default = ""
-    description = "(Optional) AD User to join the domain. If not informed, the user declared in HPC Management offering will be used."
-}
-
-variable ad_join_password {
-    default = ""
-    description = "(Optional) Password of the AD User to be used. If not informed, the user declared in HPC Management offering will be used. NOTE: if this field is sensitive in HPC Management offering, it must be informed here because sensitive data is not retrieved through Schematics Workspace APIs."
-}
-
 variable skip_symphony_config {
     type = bool
     default = false

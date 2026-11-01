@@ -39,21 +39,6 @@ data shell_script validate_pool_cidr_size {
     }
 }
 
-// validation for ad_join_password field against password protection coming from parent workspace
-data shell_script asterisk_received_in_password {
-    lifecycle_commands {
-        read = <<EOF
-        AP=`echo '${local.ad_password}' | grep '\*\*\*'`
-        if [ "$AP" != "" ]
-        then
-             echo "Please check your AD Password. It seems to be encrypted and invalid."
-             exit 1
-        fi
-        echo '{ "message" : "ok" }'
-        EOF
-    }
-}
-
 locals {
 
     // New HPC Management offerings outputs all needed data to be consumed by this worker pool.
@@ -84,19 +69,6 @@ locals {
         ),
     "")
 
-    ad_domain = var.ad_domain != "" ? var.ad_domain : try(try(local.output.ad_domain, [for input in data.ibm_schematics_workspace.schematics_workspace.template_inputs : input.value if input.name == "ad_domain" ][0]), "")
-    ad_user = var.ad_join_user != "" ? var.ad_join_user : try(
-    try (local.output.ad_user,
-        try(
-             [for input in data.ibm_schematics_workspace.schematics_workspace.template_inputs : input.value if input.name == "ad_user"][0],
-             [for input in data.ibm_schematics_workspace.schematics_workspace.template_values_metadata : input.default if input.name == "ad_user"][0] 
-           ),
-        ),
-    "")
-        
-    // FIXME: Is ad_password sensitive?    
-    ad_password = var.ad_join_password != "" ? var.ad_join_password : try(try(local.output.ad_password, [for input in data.ibm_schematics_workspace.schematics_workspace.template_inputs : input.value if input.name == "ad_password" ][0]), "")
-    
     /*
     * Declared input variables in the HPC Managemeny Schematics workspace that can be overwritten by this workspace
     */
@@ -133,7 +105,7 @@ locals {
     worker_pool_prefix = var.worker_pool_prefix
     worker_pool_start_number_at = var.worker_pool_start_at_number
     worker_pool_ips = flatten([for subnet in local.worker_pool_subnet_segmentation : [for index in range(pow(2, 32 - split("/", subnet)[1])) : cidrhost(subnet, index)]])
-    worker_pool_name_prefix = local.worker_pool_prefix!="" ? "${local.worker_pool_prefix}" : ("${local.ad_domain != "" ? "wk" : "worker" }")
+    worker_pool_name_prefix = local.worker_pool_prefix!="" ? "${local.worker_pool_prefix}" : "worker"
     worker_pool_worker_names = [for i in range(local.worker_pool_size) : "${local.cluster_prefix}-${local.worker_pool_name_prefix}-${format("%04d", i + local.worker_pool_start_number_at)}"]
     worker_pool_ip_name_mapping = {for idx in range(min(local.worker_pool_size, length(local.worker_pool_ips))) : local.worker_pool_ips[idx] => local.worker_pool_worker_names[idx]}
 
@@ -182,7 +154,7 @@ module cloud_init_scripts {
     depends_on=[data.shell_script.validate_pool_cidr_size]
     source = "./modules/cloud-init-scripts"
     worker_os=local.worker_os
-    cluster_domain=try(module.dns_records[0].domain_name, local.ad_domain)
+    cluster_domain=try(module.dns_records[0].domain_name, "")
     ego_cluster_info=local.symphony_cluster_info
     ego_base_port=var.ego_base_port
     ego_ssl_setup=var.ego_ssl_setup
@@ -191,12 +163,6 @@ module cloud_init_scripts {
     additional_resource_tag=""
     ego_master_list=local.symphony_master_names
     ego_ssl_cacert=local.ego_ssl_cacert
-    ad_info = {
-        ad_domain = local.ad_domain
-        ad_dns_zone = var.ad_dns_zone
-        ad_join_user = local.ad_user
-        ad_join_password = local.ad_password
-    }
     worker_attributes=local.worker_attributes
     skip_symphony_config = local.skip_symphony_config
 }

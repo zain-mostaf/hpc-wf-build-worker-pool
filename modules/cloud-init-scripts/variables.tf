@@ -44,11 +44,6 @@ variable additional_resource_tag {
 
 }
 
-variable ad_info {
-   type = map(string)
-   default = {}
-}
-
 variable ego_master_list {
     type = list(string)
 }
