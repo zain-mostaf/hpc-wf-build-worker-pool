@@ -163,6 +163,10 @@ module cloud_init_scripts {
     additional_resource_tag=""
     ego_master_list=local.symphony_master_names
     ego_ssl_cacert=local.ego_ssl_cacert
+    smb_share_path=var.smb_share_path
+    smb_drive_letter=var.smb_drive_letter
+    smb_user=var.smb_user
+    smb_password=var.smb_password
     worker_attributes=local.worker_attributes
     skip_symphony_config = local.skip_symphony_config
 }

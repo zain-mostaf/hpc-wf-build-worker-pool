@@ -125,6 +125,28 @@ variable security_groups {
     description = "(Optional) List of security group names to be added into this worker. If not informed, the list will be imported from the HPC management offering."
 }
 
+variable smb_share_path {
+    default = ""
+    description = "(Optional) UNC path of an SMB share to mount on Windows workers (ex: \\\\server\\share). If omitted, nothing is mounted."
+}
+
+variable smb_drive_letter {
+    default = "Z:"
+    description = "(Optional) Drive letter used to mount the SMB share on Windows workers."
+}
+
+variable smb_user {
+    default = ""
+    description = "(Optional) User used to connect to the SMB share (ex: DOMAIN\\user or user)."
+}
+
+variable smb_password {
+    type = string
+    default = ""
+    sensitive = true
+    description = "(Optional) Password of the SMB user. It is base64-encoded (not encrypted) and stored in the instance user data."
+}
+
 variable skip_symphony_config {
     type = bool
     default = false

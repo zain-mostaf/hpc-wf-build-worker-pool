@@ -20,6 +20,12 @@ grid_manager_prefix = "wf-grid-man"   # gives wdcaz1-wf-grid-man-01, -02, -03
 ego_base_port = 7869
 ego_ssl_setup = false   # false gives -SSLPort NO_SSL
 
+# --- SMB share mounted on Windows workers (net use Z: \\server\share /user:<user> <password>) ---
+smb_share_path   = "\\\\<server>\\<share>"   # leave empty to skip mounting
+smb_drive_letter = "Z:"
+smb_user         = "<smb-user>"
+smb_password     = "<smb-password>"          # better as a sensitive Schematics variable
+
 # --- Optional overrides (empty means use the parent workspace values) ---
 symphony_subnet_id             = ""
 symphony_instance_profile      = ""

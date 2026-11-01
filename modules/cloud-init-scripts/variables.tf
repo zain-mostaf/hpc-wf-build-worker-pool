@@ -58,6 +58,24 @@ variable worker_attributes {
    }
 }
 
+variable smb_share_path {
+   default = ""
+}
+
+variable smb_drive_letter {
+   default = "Z:"
+}
+
+variable smb_user {
+   default = ""
+}
+
+variable smb_password {
+   type = string
+   default = ""
+   sensitive = true
+}
+
 variable skip_symphony_config {
    type = bool
    default = false

@@ -91,6 +91,84 @@ Function Modify-ComputerName {
 
 <#
 ########################################################################
+# Mount an SMB share as a drive letter (net use)
+# Equivalent to: net use Z: \\server\share /user:<user> <password> /persistent:yes
+########################################################################
+#>
+Function Mount-SmbDrive {
+    [CmdletBinding()]
+      param(
+        [Parameter(Mandatory = $true)]
+            [string]$SharePath,   # UNC path of the share (ex: \\server\share)
+        [Parameter(Mandatory = $true)]
+            [string]$DriveLetter, # Drive letter to map (ex: Z: or Z)
+        [Parameter(Mandatory = $false)]
+            [string]$User,        # User used to connect to the share
+        [Parameter(Mandatory = $false)]
+            [string]$Password     # Password of the user (plain text)
+      )
+
+    try {
+        if (-not $DriveLetter.EndsWith(":")) {
+            $DriveLetter = "$($DriveLetter):"
+        }
+
+        if (Test-Path "$DriveLetter\") {
+            Write-Log -Level Info "(Mount-SmbDrive) Drive $DriveLetter is already mounted, skipping"
+            return
+        }
+
+        Write-Log -Level Info "(Mount-SmbDrive) Mounting $SharePath as $DriveLetter"
+        if ([String]::IsNullOrWhiteSpace($User)) {
+            $Output = net use $DriveLetter $SharePath /persistent:yes 2>&1
+        } else {
+            $Output = net use $DriveLetter $SharePath "/user:$User" $Password /persistent:yes 2>&1
+        }
+
+        if ($LASTEXITCODE -ne 0) {
+            Write-Log -Level Error "(Mount-SmbDrive) Failed to mount $SharePath as $($DriveLetter): $(Out-String -InputObject $Output)"
+        } else {
+            Write-Log -Level Info "(Mount-SmbDrive) $SharePath mounted as $DriveLetter"
+        }
+    } catch {
+        Write-Log -Level Error $_
+    }
+}
+
+<#
+########################################################################
+# SMB / performance tuning
+#  - lists the SMB shares of the machine
+#  - activates the High performance power plan
+#  - sets LanmanWorkstation MaxCmds to 2048 (needs a reboot / workstation restart to take effect)
+########################################################################
+#>
+Function Set-SmbPerformanceTuning {
+    [CmdletBinding()]
+      param()
+
+    try {
+        Write-Log -Level Info "(Set-SmbPerformanceTuning) Listing SMB shares"
+        $Shares = Get-SmbShare | Select-Object Name, Path, CompressData, EnableMultiChannel | Out-String
+        Write-Log -Level Info $Shares
+
+        Write-Log -Level Info "(Set-SmbPerformanceTuning) Activating High performance power plan"
+        $HighPerfGuid = powercfg /List | ForEach-Object { if ($_.Contains("High performance")) { $_.Split()[3] } }
+        if (![String]::IsNullOrWhiteSpace($HighPerfGuid)) {
+            powercfg /SetActive $HighPerfGuid
+        } else {
+            Write-Log -Level Warn "(Set-SmbPerformanceTuning) High performance power plan not found"
+        }
+
+        Write-Log -Level Info "(Set-SmbPerformanceTuning) Setting LanmanWorkstation MaxCmds to 2048"
+        Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters" -Name "MaxCmds" -Value 2048 -Force
+    } catch {
+        Write-Log -Level Error $_
+    }
+}
+
+<#
+########################################################################
 # Login and close resource
 ########################################################################
 #>
@@ -148,6 +226,14 @@ Function Deploy-Worker {
         [Parameter(Mandatory = $false)]
             [string]$ClusterID, ## Only required for SSL. Cluster ID used in the GPFS file system (i.e. citi-wdcaz1)
         [Parameter(Mandatory = $false)]
+            [string]$SmbSharePath,     # (Optional) UNC path of an SMB share to mount (ex: \\server\share)
+        [Parameter(Mandatory = $false)]
+            [string]$SmbDriveLetter,   # (Optional) Drive letter for the SMB share (default Z:)
+        [Parameter(Mandatory = $false)]
+            [string]$SmbUser,          # (Optional) User to connect to the SMB share
+        [Parameter(Mandatory = $false)]
+            [string]$SmbPassword,      # (Optional) Base64-encoded password of the SMB user
+        [Parameter(Mandatory = $false)]
             [string]$ClosedResource,   # Checks if resource should be closed
         [Parameter(Mandatory = $false)]
             [string]$NoStartSymphonyConfig  # If this variable is true, Symphony setup will be skipped and cloud-init script will return 0
@@ -174,6 +260,19 @@ Function Deploy-Worker {
         $SuffixSearchList = @($DNSSuffix -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' })
         Write-Log -Level Info "(Deploy-Worker) Adding DNS search suffixes: $($SuffixSearchList -join ', ')"
         Set-DnsClientGlobalSetting -SuffixSearchList $SuffixSearchList
+
+        ### SMB / performance tuning
+        Set-SmbPerformanceTuning
+
+        ### Mount SMB share (only when a share path is informed)
+        if (![String]::IsNullOrWhiteSpace($SmbSharePath)) {
+            if ([String]::IsNullOrWhiteSpace($SmbDriveLetter)) { $SmbDriveLetter = "Z:" }
+            $DecodedSmbPass = ""
+            if (![String]::IsNullOrWhiteSpace($SmbPassword)) {
+                $DecodedSmbPass = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($SmbPassword))
+            }
+            Mount-SmbDrive -SharePath $SmbSharePath -DriveLetter $SmbDriveLetter -User $SmbUser -Password $DecodedSmbPass
+        }
 
         ### Symphony setup will be skipped if flag is true
         if ($NoStartSymphonyConfig -eq $true) {
