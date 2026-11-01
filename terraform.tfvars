@@ -22,6 +22,10 @@ ad_dns_zone      = "common.wf.ibmcloud"          # AD DNS zone, added to the sea
 ad_join_user     = "administrator@wf.ibmcloud"   # UPN format. Alternative: "WF\\administrator"
 ad_join_password = "<administrator-password>"    # better as a sensitive Schematics variable
 
+# --- Symphony ports (omit to read them from the parent workspace symphony_cluster_info) ---
+ego_base_port = 7869
+ego_ssl_setup = false   # false gives -SSLPort NO_SSL
+
 # --- Optional overrides (empty means use the parent workspace values) ---
 symphony_subnet_id             = ""
 symphony_instance_profile      = ""

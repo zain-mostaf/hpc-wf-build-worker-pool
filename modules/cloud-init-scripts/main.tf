@@ -13,8 +13,8 @@
 locals {
 
    // EGO local properties for Jinja templating
-   ego_base_port =  try(split("= ", regex("(?:ego_base_port = )\\d{1,}", var.ego_cluster_info))[1], 7869)
-   ego_ssl_setup =  try(split("= ", regex("(?:ego_ssl_setup = )\\w{1,}", var.ego_cluster_info))[1], false)
+   ego_base_port =  var.ego_base_port != null ? var.ego_base_port : try(split("= ", regex("(?:ego_base_port = )\\d{1,}", var.ego_cluster_info))[1], 7869)
+   ego_ssl_setup =  var.ego_ssl_setup != null ? tostring(var.ego_ssl_setup) : try(split("= ", regex("(?:ego_ssl_setup = )\\w{1,}", var.ego_cluster_info))[1], false)
    ego_ssl_port =   try(split("= ", regex("(?:ego_ssl_port = )\\d{1,}", var.ego_cluster_info))[1], 0)
    ego_ssl_cacert = var.ego_ssl_cacert
    ego_top = var.worker_os == "windows" ? "C:\\Program Files\\IBM\\SpectrumComputing" : "/opt/ibm/spectrumcomputing"

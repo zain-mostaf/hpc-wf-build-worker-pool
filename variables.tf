@@ -94,6 +94,18 @@ variable symphony_post_deployment_tasks {
     description="(Optional) Post-deployment tasks to be executed after Symphony deployment. For Linux, it is a set of Ansible tasks to be included in the linux-worker-postdeployment.yaml file. For Windows, it is a set of Powershell commands that will be inserted in a function in the file windows-worker-postdeployment.ps1."
 }
 
+variable ego_base_port {
+    type = number
+    default = null
+    description = "(Optional) Symphony (EGO) base port used by workers (ex: 7869). If omitted, the value is read from symphony_cluster_info of the HPC Management workspace (default 7869 when not found)."
+}
+
+variable ego_ssl_setup {
+    type = bool
+    default = null
+    description = "(Optional) Set false to disable SSL on workers (-SSLPort NO_SSL) or true to enable it. If omitted, the value is read from symphony_cluster_info of the HPC Management workspace."
+}
+
 variable ego_ssl_cacert {
     default=""
     description="(Optional) CA Certificate to copy to workers during provisioning. If omitted, the original certificate is untouched."

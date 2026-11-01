@@ -22,6 +22,16 @@ variable ego_cluster_info {
 
 }
 
+variable ego_base_port {
+   type = number
+   default = null
+}
+
+variable ego_ssl_setup {
+   type = bool
+   default = null
+}
+
 variable ego_config_override {
    default = ""
 }
