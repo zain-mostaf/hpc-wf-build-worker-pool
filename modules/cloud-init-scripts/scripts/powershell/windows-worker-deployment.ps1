@@ -221,8 +221,13 @@ Function Deploy-Worker {
                 Write-Log -Level Info "(Deploy-Worker) Machine is part of domain $DomainName"
             }
         }
-        Write-Log -Level Info "(Deploy-Worker) Adding DNS search suffix to $DNSSuffix"
-        Set-DnsClientGlobalSetting -SuffixSearchList @($DNSSuffix)
+        ### Search list: worker DNS zone first, then the AD domain (if different)
+        $SuffixSearchList = @($DNSSuffix)
+        if (![String]::IsNullOrWhiteSpace($DomainName) -and $DomainName -ne $DNSSuffix) {
+            $SuffixSearchList += $DomainName
+        }
+        Write-Log -Level Info "(Deploy-Worker) Adding DNS search suffixes: $($SuffixSearchList -join ', ')"
+        Set-DnsClientGlobalSetting -SuffixSearchList $SuffixSearchList
 
         ### Symphony setup will be skipped if flag is true
         if ($NoStartSymphonyConfig -eq $true) {

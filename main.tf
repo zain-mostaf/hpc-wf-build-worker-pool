@@ -82,7 +82,7 @@ locals {
     "")
 
     ad_dns_ips = try(try(local.output.ad_dns_ips, [for input in data.ibm_schematics_workspace.schematics_workspace.template_inputs : input.value if input.name == "ad_dns_ips" ][0]), "")
-    ad_domain = try(try(local.output.ad_domain, [for input in data.ibm_schematics_workspace.schematics_workspace.template_inputs : input.value if input.name == "ad_domain" ][0]), "")
+    ad_domain = var.ad_domain != "" ? var.ad_domain : try(try(local.output.ad_domain, [for input in data.ibm_schematics_workspace.schematics_workspace.template_inputs : input.value if input.name == "ad_domain" ][0]), "")
     ad_user = var.ad_join_user != "" ? var.ad_join_user : try(
     try (local.output.ad_user,
         try(

@@ -108,6 +108,11 @@ variable security_groups {
     description = "(Optional) List of security group names to be added into this worker. If not informed, the list will be imported from the HPC management offering."
 }
 
+variable ad_domain {
+    default = ""
+    description = "(Optional) Active Directory domain / IBM Cloud DNS zone of the AD (ex: common.wf.ibmcloud). It is used to join Windows workers and is added to their DNS search suffix list. If not informed, the domain declared in HPC Management offering will be used."
+}
+
 variable ad_join_user {
     default = ""
     description = "(Optional) AD User to join the domain. If not informed, the user declared in HPC Management offering will be used."
