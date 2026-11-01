@@ -180,6 +180,8 @@ Function Deploy-Worker {
         [Parameter(Mandatory = $false)]
             [string]$DomainName, # Domain name to join
         [Parameter(Mandatory = $false)]
+            [string]$ADDNSZone, # IBM Cloud DNS zone where the AD servers are registered (added to DNS search list)
+        [Parameter(Mandatory = $false)]
             [string]$JoinUser,  # Domain user to join machines into a domain
         [Parameter(Mandatory = $false)]
             [string]$JoinUserPassword, # Password of the join user
@@ -221,10 +223,12 @@ Function Deploy-Worker {
                 Write-Log -Level Info "(Deploy-Worker) Machine is part of domain $DomainName"
             }
         }
-        ### Search list: worker DNS zone first, then the AD domain (if different)
+        ### Search list: worker DNS zone, AD DNS zone, then the AD domain (skipping empty/duplicate entries)
         $SuffixSearchList = @($DNSSuffix)
-        if (![String]::IsNullOrWhiteSpace($DomainName) -and $DomainName -ne $DNSSuffix) {
-            $SuffixSearchList += $DomainName
+        foreach ($Suffix in @($ADDNSZone, $DomainName)) {
+            if (![String]::IsNullOrWhiteSpace($Suffix) -and $SuffixSearchList -notcontains $Suffix) {
+                $SuffixSearchList += $Suffix
+            }
         }
         Write-Log -Level Info "(Deploy-Worker) Adding DNS search suffixes: $($SuffixSearchList -join ', ')"
         Set-DnsClientGlobalSetting -SuffixSearchList $SuffixSearchList

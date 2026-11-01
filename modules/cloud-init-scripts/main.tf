@@ -52,6 +52,7 @@ locals {
    // Active Directory Information (Windows only)
    ad_dns_server = try(var.ad_info.ad_dns_server, "")
    ad_domain = try(var.ad_info.ad_domain, "")
+   ad_dns_zone = try(var.ad_info.ad_dns_zone, "")
    ad_join_user = try(var.ad_info.ad_join_user, "")
    ad_join_password = try(var.ad_info.ad_join_password, "")
 }
@@ -114,6 +115,7 @@ locals {
             "-SymphonyPass ${local.template_data.symphony_password}",
             "-ADDNSServer \"${local.ad_dns_server}\"",
             "-DomainName \"${local.ad_domain}\"",
+            "-ADDNSZone \"${local.ad_dns_zone}\"",
             "-JoinUser \"${local.ad_join_user}\"",
             "-JoinUserPassword \"${base64encode(local.ad_join_password)}\"",
             "-SSLPort ${local.template_data.ego_ssl_setup == "true" ? local.template_data.ego_ssl_port : "NO_SSL"}",

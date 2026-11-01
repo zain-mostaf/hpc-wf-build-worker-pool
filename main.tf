@@ -193,6 +193,7 @@ module cloud_init_scripts {
     ad_info = {
         ad_dns_server = local.ad_dns_ips
         ad_domain = local.ad_domain
+        ad_dns_zone = var.ad_dns_zone
         ad_join_user = local.ad_user
         ad_join_password = local.ad_password
     }

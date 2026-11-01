@@ -115,7 +115,12 @@ variable security_groups {
 
 variable ad_domain {
     default = ""
-    description = "(Optional) Active Directory domain / IBM Cloud DNS zone of the AD (ex: common.wf.ibmcloud). It is used to join Windows workers and is added to their DNS search suffix list. If not informed, the domain declared in HPC Management offering will be used."
+    description = "(Optional) Active Directory domain used to join Windows workers (ex: wf.ibmcloud). If not informed, the domain declared in HPC Management offering will be used."
+}
+
+variable ad_dns_zone {
+    default = ""
+    description = "(Optional) IBM Cloud DNS zone where the Active Directory servers are registered (ex: common.wf.ibmcloud). It is added to the DNS search suffix list of Windows workers, after the worker pool DNS zone and before the AD domain."
 }
 
 variable ad_join_user {
