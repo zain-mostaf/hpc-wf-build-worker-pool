@@ -132,7 +132,7 @@ variable ad_domain {
 
 variable ad_dns_zone {
     default = ""
-    description = "(Optional) IBM Cloud DNS zone where the Active Directory servers are registered (ex: common.wf.ibmcloud). It is added to the DNS search suffix list of Windows workers, after the worker pool DNS zone and before the AD domain."
+    description = "(Optional) IBM Cloud DNS zone where the Active Directory servers are registered (ex: common.wf.ibmcloud). It is added to the DNS search suffix list of Windows workers, after the worker pool DNS zone."
 }
 
 variable ad_join_user {

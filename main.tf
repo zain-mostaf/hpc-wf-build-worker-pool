@@ -84,7 +84,6 @@ locals {
         ),
     "")
 
-    ad_dns_ips = try(try(local.output.ad_dns_ips, [for input in data.ibm_schematics_workspace.schematics_workspace.template_inputs : input.value if input.name == "ad_dns_ips" ][0]), "")
     ad_domain = var.ad_domain != "" ? var.ad_domain : try(try(local.output.ad_domain, [for input in data.ibm_schematics_workspace.schematics_workspace.template_inputs : input.value if input.name == "ad_domain" ][0]), "")
     ad_user = var.ad_join_user != "" ? var.ad_join_user : try(
     try (local.output.ad_user,
@@ -193,7 +192,6 @@ module cloud_init_scripts {
     ego_master_list=local.symphony_master_names
     ego_ssl_cacert=local.ego_ssl_cacert
     ad_info = {
-        ad_dns_server = local.ad_dns_ips
         ad_domain = local.ad_domain
         ad_dns_zone = var.ad_dns_zone
         ad_join_user = local.ad_user

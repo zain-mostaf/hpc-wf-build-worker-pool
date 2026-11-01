@@ -98,8 +98,6 @@ Function Join-Ad-Domain {
     [CmdletBinding()]
        param (
         [Parameter(Mandatory = $true)]
-            [string]$ADDNSServer, # IP Address of DNS Server.
-        [Parameter(Mandatory = $true)]
             [string]$DomainName, # Domain name to join
         [Parameter(Mandatory = $false)]
             [string]$JoinUser,  # Domain user to join machines into a domain
@@ -107,8 +105,6 @@ Function Join-Ad-Domain {
             [string]$JoinUserPassword # Password of the join user
        )
    
-    ### Set DNS Client for alternative aliases
-    Set-DnsClientServerAddress -InterfaceAlias "Ethernet*" -ServerAddresses ($ADDNSServer)
 
     $password = ConvertTo-SecureString $JoinUserPassword -AsPlainText -Force
     $Cred = New-Object System.Management.Automation.PSCredential ($JoinUser, $password)
@@ -152,7 +148,7 @@ Function Close-Resource {
 ## Deploy-Worker -MasterList "<masterList>" -ComputerName "<workerName>" 
 ##    -DNSSuffix "<DNSSuffix>" -BasePort "<BasePort>" -SymphonyPass <Password>
 ##    -ScaleManagerServer <Scale_Manager> -ClusterID <clusterId> 
-##    -ADDNSServer "172.200.2.13" -DomainName "citihpc.com" -JoinUser <user> -JoinUserPassword <password>
+##    -DomainName "wf.ibmcloud" -ADDNSZone "common.wf.ibmcloud" -JoinUser <user> -JoinUserPassword <password>
 #################################################################
 #>
 
@@ -175,8 +171,6 @@ Function Deploy-Worker {
             [string]$ScaleManagerServer, ## Only required for SSL. FQDN of Scale Manager to download certificates from
         [Parameter(Mandatory = $false)]
             [string]$ClusterID, ## Only required for SSL. Cluster ID used in the GPFS file system (i.e. citi-wdcaz1)
-        [Parameter(Mandatory = $false)]
-            [string]$ADDNSServer, # AD DNS IP Server (if we want to join this worker into a domain)
         [Parameter(Mandatory = $false)]
             [string]$DomainName, # Domain name to join
         [Parameter(Mandatory = $false)]
@@ -211,24 +205,22 @@ Function Deploy-Worker {
     } else {
         Write-Log -Level Info "(Deploy-Worker) Computer Name is $ComputerName, executing the remaining logic after the reboot"
 
-        if ($ADDNSServer -ne "") {
+        if (![String]::IsNullOrWhiteSpace($DomainName)) {
             Write-Log -Level Info "(Deploy-Worker) Checking if this machine is part of domain"
             $partOfDomain=(Get-WmiObject -Class Win32_ComputerSystem).PartOfDomain
 
             if ($partOfDomain -eq $false) {
-                Join-Ad-Domain -ADDNSServer $ADDNSServer -DomainName $DomainName -JoinUser $JoinUser -JoinUserPassword $DecodedJoinUserPass
+                Join-Ad-Domain -DomainName $DomainName -JoinUser $JoinUser -JoinUserPassword $DecodedJoinUserPass
                 Write-Log -Level Info "(Deploy-Worker) Machine added to domain $DomainName, restart and execute the script again (exit 1003)"
                 exit 1003
             } else {
                 Write-Log -Level Info "(Deploy-Worker) Machine is part of domain $DomainName"
             }
         }
-        ### Search list: worker DNS zone, AD DNS zone, then the AD domain (skipping empty/duplicate entries)
+        ### Search list: worker DNS zone, then the AD DNS zone (if informed and different)
         $SuffixSearchList = @($DNSSuffix)
-        foreach ($Suffix in @($ADDNSZone, $DomainName)) {
-            if (![String]::IsNullOrWhiteSpace($Suffix) -and $SuffixSearchList -notcontains $Suffix) {
-                $SuffixSearchList += $Suffix
-            }
+        if (![String]::IsNullOrWhiteSpace($ADDNSZone) -and $ADDNSZone -ne $DNSSuffix) {
+            $SuffixSearchList += $ADDNSZone
         }
         Write-Log -Level Info "(Deploy-Worker) Adding DNS search suffixes: $($SuffixSearchList -join ', ')"
         Set-DnsClientGlobalSetting -SuffixSearchList $SuffixSearchList

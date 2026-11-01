@@ -13,8 +13,8 @@
 locals {
 
    // EGO local properties for Jinja templating
-   ego_base_port =  var.ego_base_port != null ? var.ego_base_port : try(split("= ", regex("(?:ego_base_port = )\\d{1,}", var.ego_cluster_info))[1], 7869)
-   ego_ssl_setup =  var.ego_ssl_setup != null ? tostring(var.ego_ssl_setup) : try(split("= ", regex("(?:ego_ssl_setup = )\\w{1,}", var.ego_cluster_info))[1], false)
+   ego_base_port =  var.ego_base_port != null ? var.ego_base_port : tonumber(try(split("= ", regex("(?:ego_base_port = )\\d{1,}", var.ego_cluster_info))[1], 7869))
+   ego_ssl_setup =  var.ego_ssl_setup != null ? tostring(var.ego_ssl_setup) : tostring(try(split("= ", regex("(?:ego_ssl_setup = )\\w{1,}", var.ego_cluster_info))[1], false))
    ego_ssl_port =   try(split("= ", regex("(?:ego_ssl_port = )\\d{1,}", var.ego_cluster_info))[1], 0)
    ego_ssl_cacert = var.ego_ssl_cacert
    ego_top = var.worker_os == "windows" ? "C:\\Program Files\\IBM\\SpectrumComputing" : "/opt/ibm/spectrumcomputing"
@@ -50,7 +50,6 @@ locals {
    }
 
    // Active Directory Information (Windows only)
-   ad_dns_server = try(var.ad_info.ad_dns_server, "")
    ad_domain = try(var.ad_info.ad_domain, "")
    ad_dns_zone = try(var.ad_info.ad_dns_zone, "")
    ad_join_user = try(var.ad_info.ad_join_user, "")
@@ -72,7 +71,7 @@ data jinja_template "netsh_conf_file" {
    template = "${path.module}/scripts/ansible-playbooks/templates/netsh.txt.j2"
    context {
       type = "json"
-      data = jsonencode( {ad_dns_server = local.ad_dns_server})
+      data = jsonencode({})
    }
 }
 
@@ -113,7 +112,6 @@ locals {
             "-DNSSuffix \"${local.cluster_domain}\"",
             "-BasePort ${local.template_data.ego_base_port}",
             "-SymphonyPass ${local.template_data.symphony_password}",
-            "-ADDNSServer \"${local.ad_dns_server}\"",
             "-DomainName \"${local.ad_domain}\"",
             "-ADDNSZone \"${local.ad_dns_zone}\"",
             "-JoinUser \"${local.ad_join_user}\"",

@@ -13,7 +13,7 @@ worker_pool_prefix          = ""      # optional. Empty gives <cluster_prefix>-w
 worker_pool_start_at_number = 1
 
 # --- Naming / grid managers ---
-cluster_prefix      = "wdcaz1"        # worker naming. Grid manager naming uses the parent workspace cluster_prefix
+cluster_prefix      = "wdc1wf"        # worker naming only (gives wdc1wf-wk-0001). Grid managers use the parent workspace cluster_prefix (wdcaz1)
 grid_manager_prefix = "wf-grid-man"   # gives wdcaz1-wf-grid-man-01, -02, -03
 
 # --- Active Directory / DNS ---
