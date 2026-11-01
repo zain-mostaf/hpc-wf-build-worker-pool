@@ -139,6 +139,7 @@ Function Mount-SmbDrive {
 ########################################################################
 # SMB / performance tuning
 #  - lists the SMB shares of the machine
+#  - enables SMB Multichannel on the SMB client
 #  - activates the High performance power plan
 #  - sets LanmanWorkstation MaxCmds to 2048 (needs a reboot / workstation restart to take effect)
 ########################################################################
@@ -151,6 +152,9 @@ Function Set-SmbPerformanceTuning {
         Write-Log -Level Info "(Set-SmbPerformanceTuning) Listing SMB shares"
         $Shares = Get-SmbShare | Select-Object Name, Path, CompressData, EnableMultiChannel | Out-String
         Write-Log -Level Info $Shares
+
+        Write-Log -Level Info "(Set-SmbPerformanceTuning) Enabling SMB Multichannel"
+        Set-SmbClientConfiguration -EnableMultiChannel $true -Force
 
         Write-Log -Level Info "(Set-SmbPerformanceTuning) Activating High performance power plan"
         $HighPerfGuid = powercfg /List | ForEach-Object { if ($_.Contains("High performance")) { $_.Split()[3] } }
