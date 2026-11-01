@@ -68,7 +68,7 @@ locals {
     // Region: calculated based on zone (needed for ibm builder provider)
     region = "${split("-", local.zone)[0]}-${split("-", local.zone)[1]}"
 
-    cluster_prefix = try(try(local.output.cluster_prefix, [for input in data.ibm_schematics_workspace.schematics_workspace.template_inputs : input.value if input.name == "cluster_prefix" ][0]), "")
+    cluster_prefix = var.cluster_prefix != "" ? var.cluster_prefix : try(try(local.output.cluster_prefix, [for input in data.ibm_schematics_workspace.schematics_workspace.template_inputs : input.value if input.name == "cluster_prefix" ][0]), "")
     tags = try(try(jsondecode(local.output.tags), jsondecode([for input in data.ibm_schematics_workspace.schematics_workspace.template_inputs : input.value if input.name == "tags" ][0])), [])
     ssh_keys = try(try(local.output.ssh_keys, [for input in data.ibm_schematics_workspace.schematics_workspace.template_inputs : input.value if input.name == "ssh_keys" ][0]), "")
 

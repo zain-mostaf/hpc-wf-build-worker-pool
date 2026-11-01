@@ -18,6 +18,11 @@ variable schematics_workspace_id {
     description = "ID of the HPC Management Schematics workspace. It is used to retrieve common information about the cluster (ex: VPC ID, DNS instance, etc)"
 }
 
+variable cluster_prefix {
+    default = ""
+    description = "(Optional) Cluster prefix used to name workers and Symphony grid managers. If omitted, the cluster prefix from the HPC Management workspace will be used."
+}
+
 variable worker_pool_subnet_segmentation {
     type=list(string)
     description = "List of CIDRs to be used for worker IP assignment. It will limit the number of available spots for this worker pool."
