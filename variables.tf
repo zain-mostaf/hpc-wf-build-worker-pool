@@ -23,6 +23,11 @@ variable cluster_prefix {
     description = "(Optional) Cluster prefix used to name the workers of this pool (ex: for Windows workers). It does NOT change the Symphony grid manager names, which always come from the HPC Management workspace. If omitted, the cluster prefix from the HPC Management workspace will be used."
 }
 
+variable grid_manager_prefix {
+    default = "wf-grid-man"
+    description = "(Optional) Name part of the Symphony grid managers in the HPC Management workspace. Grid manager hosts are named <parent cluster_prefix>-<grid_manager_prefix>-01, -02, -03 (ex: wdcaz1-wf-grid-man-01)."
+}
+
 variable worker_pool_subnet_segmentation {
     type=list(string)
     description = "List of CIDRs to be used for worker IP assignment. It will limit the number of available spots for this worker pool."

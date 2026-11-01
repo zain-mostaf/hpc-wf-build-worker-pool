@@ -105,9 +105,9 @@ locals {
      symphony_linux_image_name = try(try(local.output.symphony_image_name, [for input in data.ibm_schematics_workspace.schematics_workspace.template_inputs : input.value if input.name == "symphony_image_name" ][0]), "")
      symphony_windows_image_name = try([for input in data.ibm_schematics_workspace.schematics_workspace.template_inputs : input.value if input.name == "windows_image_name" ][0], "")
 
-    // Grid manager host names from the parent HPC Management workspace (<parent_cluster_prefix>-grid-man-01..03),
+    // Grid manager host names from the parent HPC Management workspace (<parent_cluster_prefix>-<grid_manager_prefix>-01..03),
     // used to configure ego.conf on workers. They always use the parent prefix, not var.cluster_prefix.
-    symphony_master_names = [for i in range(3) : "${local.parent_cluster_prefix}-grid-man-${format("%02d", i+1)}"]
+    symphony_master_names = [for i in range(3) : "${local.parent_cluster_prefix}-${var.grid_manager_prefix}-${format("%02d", i+1)}"]
 
     /*
     *  Output variables coming from HPC Management Schematics workspace (requires commit 7f45c3fa7c0d85e3bb02ccb2afeb8b5fd178046b in citi-hpc-offering to work)
