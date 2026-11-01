@@ -34,6 +34,7 @@ locals {
       EGO_TOP = local.ego_top,
       ego_primary_host = var.ego_master_list[0],
       ego_secondary_host = var.ego_master_list[1],
+      ego_master_hosts = join(" ", var.ego_master_list),
       ego_base_port = local.ego_base_port,
       ego_ssl_setup = local.ego_ssl_setup,
       ego_ssl_port = local.ego_ssl_port,
@@ -106,7 +107,7 @@ locals {
        cacert_pem_content = base64gzip(replace(local.ego_ssl_cacert, "\n", "\r\n")),
        windows_netsh_content = base64encode(data.jinja_template.netsh_conf_file.result)
        deploy_worker_arguments = join(" ",[
-            "-MasterList \"${local.template_data.ego_primary_host} ${local.template_data.ego_secondary_host}\"",
+            "-MasterList \"${local.template_data.ego_master_hosts}\"",
             "-ComputerName __COMPUTERNAME__" ,
             "-DNSSuffix \"${local.cluster_domain}\"",
             "-BasePort ${local.template_data.ego_base_port}",

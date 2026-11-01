@@ -20,7 +20,7 @@ variable schematics_workspace_id {
 
 variable cluster_prefix {
     default = ""
-    description = "(Optional) Cluster prefix used to name workers and Symphony grid managers. If omitted, the cluster prefix from the HPC Management workspace will be used."
+    description = "(Optional) Cluster prefix used to name the workers of this pool (ex: for Windows workers). It does NOT change the Symphony grid manager names, which always come from the HPC Management workspace. If omitted, the cluster prefix from the HPC Management workspace will be used."
 }
 
 variable worker_pool_subnet_segmentation {
