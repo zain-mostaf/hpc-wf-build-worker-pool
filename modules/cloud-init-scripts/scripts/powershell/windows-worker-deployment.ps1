@@ -104,8 +104,80 @@ Function Modify-ComputerName {
 <#
 ########################################################################
 # SMB mounting is implemented in mountsmb.ps1.
+# cloud-init runs this script in an impersonated session where New-SmbGlobalMapping fails with
+# "A specified logon session does not exist" (error 1312), so mountsmb.ps1 is executed as SYSTEM
+# through a temporary scheduled task. The global mapping is then visible to every session (RDP included)
+# and persists after reboot. A mount failure is logged but does not stop the worker deployment.
 ########################################################################
 #>
+Function ConvertTo-PsLiteral([string]$Value) {
+    return "'" + ($Value -replace "'", "''") + "'"
+}
+
+Function Mount-SmbDriveAsSystem {
+    [CmdletBinding()]
+      param(
+        [Parameter(Mandatory = $true)]
+            [string]$SharePath,
+        [Parameter(Mandatory = $true)]
+            [string]$DriveLetter,
+        [Parameter(Mandatory = $false)]
+            [string]$User,
+        [Parameter(Mandatory = $false)]
+            [string]$Password,
+        [Parameter(Mandatory = $false)]
+            [string]$ServerName
+      )
+
+    $Folder = "c:\symphony-deployment-scripts"
+    $TaskName = "MountSmbGlobalMapping"
+    $Wrapper = "$Folder\mountsmb-task.ps1"
+    $TaskLog = "$Folder\mountsmb.log"
+    $ResultFile = "$Folder\mountsmb.result"
+
+    try {
+        $PassB64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($Password))
+        $Lines = @(
+            "`$ErrorActionPreference = 'Stop'",
+            "try {",
+            "  `$Pass = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('$PassB64'))",
+            "  & '$Folder\mountsmb.ps1' -SharePath $(ConvertTo-PsLiteral $SharePath) -DriveLetter $(ConvertTo-PsLiteral $DriveLetter) -User $(ConvertTo-PsLiteral $User) -Password `$Pass -ServerName $(ConvertTo-PsLiteral $ServerName) *>&1 | Out-File '$TaskLog' -Append -Encoding ascii",
+            "  'OK' | Set-Content '$ResultFile'",
+            "} catch {",
+            "  ('FAILED: ' + `$_) | Out-File '$TaskLog' -Append -Encoding ascii",
+            "  ('FAILED: ' + `$_) | Set-Content '$ResultFile'",
+            "}"
+        )
+        Set-Content -Path $Wrapper -Value $Lines
+        Remove-Item $ResultFile, $TaskLog -Force -ErrorAction SilentlyContinue
+
+        Write-Log -Level Info "(Mount-SmbDriveAsSystem) Mounting $SharePath as $DriveLetter as SYSTEM (scheduled task $TaskName)"
+        $Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$Wrapper`""
+        $Principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+        Register-ScheduledTask -TaskName $TaskName -Action $Action -Principal $Principal -Force | Out-Null
+        Start-ScheduledTask -TaskName $TaskName
+
+        ### mountsmb.ps1 retries 5 times with 15 seconds between attempts: wait up to ~7 minutes
+        for ($w = 0; $w -lt 210 -and -not (Test-Path $ResultFile); $w++) { Start-Sleep -Seconds 2 }
+
+        if (Test-Path $TaskLog) {
+            foreach ($Line in (Get-Content $TaskLog)) { Write-Log -Level Info "(Mount-SmbDriveAsSystem) $Line" }
+        }
+
+        $TaskOutput = if (Test-Path $ResultFile) { (Get-Content $ResultFile -Raw).Trim() } else { "no result (timeout)" }
+        $Mapping = Get-SmbGlobalMapping -ErrorAction SilentlyContinue | Where-Object { $_.LocalPath -eq $DriveLetter }
+        if ($TaskOutput -eq "OK" -and $Mapping) {
+            Write-Log -Level Info "(Mount-SmbDriveAsSystem) $($Mapping.RemotePath) mapped as $DriveLetter, status: $($Mapping.Status)"
+        } else {
+            Write-Log -Level Error "(Mount-SmbDriveAsSystem) Could not mount $SharePath as ${DriveLetter} - $TaskOutput"
+        }
+    } catch {
+        Write-Log -Level Error "(Mount-SmbDriveAsSystem) $_"
+    } finally {
+        Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
+        Remove-Item $Wrapper, $ResultFile -Force -ErrorAction SilentlyContinue
+    }
+}
 
 
 <#
@@ -207,6 +279,8 @@ Function Deploy-Worker {
         [Parameter(Mandatory = $false)]
             [string]$SmbDriveLetter,   # (Optional) Drive letter for the SMB share (default Z:)
         [Parameter(Mandatory = $false)]
+            [string]$SmbServerName,    # Local account authority for the selected SMB server
+        [Parameter(Mandatory = $false)]
             [string]$SmbUser,          # (Optional) User to connect to the SMB share
         [Parameter(Mandatory = $false)]
             [string]$SmbPassword,      # (Optional) Base64-encoded password of the SMB user
@@ -248,7 +322,7 @@ Function Deploy-Worker {
             if (![String]::IsNullOrWhiteSpace($SmbPassword)) {
                 $DecodedSmbPass = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($SmbPassword))
             }
-            & "$DeploymentScriptsFolder\mountsmb.ps1" -SharePath $SmbSharePath -DriveLetter $SmbDriveLetter -User $SmbUser -Password $DecodedSmbPass
+            Mount-SmbDriveAsSystem -SharePath $SmbSharePath -DriveLetter $SmbDriveLetter -User $SmbUser -Password $DecodedSmbPass -ServerName $SmbServerName
         }
 
         ### Symphony setup will be skipped if flag is true

@@ -28,11 +28,21 @@ locals {
     // Odd worker numbers (ex: -0001) use smb_share_paths[0], even numbers (ex: -0002) use smb_share_paths[1].
     // With a single entry every worker uses it; with no entries nothing is mounted.
     smb_share_paths = var.smb_share_paths
+    smb_index_by_worker = {
+        for ip, name in local.machine_ip_name_mapping : ip => (
+            length(local.smb_share_paths) == 0 ? 0 :
+            (parseint(regex("\\d+$", name), 10) % 2 == 1 ? 0 : 1) % length(local.smb_share_paths)
+        )
+    }
     smb_share_by_worker = {
         for ip, name in var.machine_ip_name_mapping : ip => (
             length(local.smb_share_paths) == 0 ? "" :
-            replace(local.smb_share_paths[(parseint(regex("\\d+$", name), 10) % 2 == 1 ? 0 : 1) % length(local.smb_share_paths)], "'", "''")
+            replace(local.smb_share_paths[local.smb_index_by_worker[ip]], "'", "''")
         )
+    }
+    smb_server_name_by_worker = {
+        for ip, name in local.machine_ip_name_mapping : ip =>
+            replace(try(var.smb_server_names[local.smb_index_by_worker[ip]], ""), "'", "''")
     }
 }
 
@@ -46,6 +56,26 @@ data ibm_is_image image_by_name {
     name = local.symphony_image_id
 }
 
+// One VNI per worker, created as its own resource and attached to the instance below.
+// auto_delete = true so IBM Cloud deletes the VNI together with the instance it is attached to.
+resource "ibm_is_virtual_network_interface" "worker" {
+
+  for_each                  = local.machine_ip_name_mapping
+  name                      = "${each.value}-vni"
+  subnet                    = try(data.ibm_is_subnet.subnet_by_name[0].id, local.subnet_id_or_name)
+  security_groups           = local.security_groups
+  resource_group            = local.resource_group_id
+  allow_ip_spoofing         = false
+  enable_infrastructure_nat = true
+  auto_delete               = true
+
+  primary_ip {
+    address     = each.key
+    auto_delete = true
+    name        = "${each.value}-eth0"
+  }
+}
+
 resource "ibm_is_instance" "worker" {
  
   for_each       = local.machine_ip_name_mapping
@@ -56,7 +86,7 @@ resource "ibm_is_instance" "worker" {
   zone           = local.zone
   keys           = local.ssh_keys
   resource_group = local.resource_group_id
-  user_data      = replace(replace(local.cloud_init_script, "__COMPUTERNAME__", each.value), "__SMBSHARE__", local.smb_share_by_worker[each.key])
+  user_data      = replace(replace(replace(local.cloud_init_script, "__COMPUTERNAME__", each.value), "__SMBSHARE__", local.smb_share_by_worker[each.key]), "__SMBSERVERNAME__", local.smb_server_name_by_worker[each.key])
 
   tags           = concat(local.tags, ["role:symphony-worker"])
   metadata_service {
@@ -66,25 +96,16 @@ resource "ibm_is_instance" "worker" {
     name = "eth0"
 
     virtual_network_interface {
-      // Create the VNI with its target so IBM Cloud can delete it with the VSI.
-      name                      = "${each.value}-vni"
-      subnet                    = try(data.ibm_is_subnet.subnet_by_name[0].id, local.subnet_id_or_name)
-      security_groups           = local.security_groups
-      resource_group            = local.resource_group_id
-      allow_ip_spoofing         = false
-      enable_infrastructure_nat = true
-      auto_delete               = true
-
-      primary_ip {
-        address     = each.key
-        auto_delete = true
-        name        = "${each.value}-eth0"
-      }
+      id = ibm_is_virtual_network_interface.worker[each.key].id
     }
   }
   
   lifecycle {
       ignore_changes = [ user_data, tags, image ]
+      precondition {
+          condition     = length(var.smb_server_names) == 0 || length(var.smb_server_names) == length(var.smb_share_paths)
+          error_message = "smb_server_names must be empty or contain one computer name per smb_share_path entry, in the same order."
+      }
   }
 
  

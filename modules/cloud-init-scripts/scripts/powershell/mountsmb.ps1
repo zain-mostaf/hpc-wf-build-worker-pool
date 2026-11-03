@@ -6,7 +6,7 @@
 #   -SharePath   \\10.136.64.26\wf_scale_share
 #   -User        smb_user       (bare local account, e.g. wfuser)
 #   -Password    smb_password
-#   -ServerName  smb_server_name (file server computer name, e.g. WFFILESRV) - recommended
+#   -ServerName  selected entry from smb_server_names (actual SMB account authority)
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
@@ -45,8 +45,7 @@ $User = $User.Trim()
 $IsIp = $Server -match '^\d{1,3}(\.\d{1,3}){3}$'
 
 # --- Build the list of account formats to try -------------------------------
-# Workgroup (no domain): a bare account or "<IP>\user" often yields error 1312
-# with global mappings. The reliable form is "<server computer name>\user".
+# Use one qualified identity. Explicit server names avoid relying on discovery.
 function Get-ServerComputerName {
     param([string]$Name, [bool]$IsIpAddress)
     if (-not [string]::IsNullOrWhiteSpace($Name)) { return $Name.Trim().Split('.')[0] }
@@ -67,9 +66,13 @@ if ($User -match '[\\@]') {
     $Candidates.Add($User)                      # caller gave a qualified name: use as-is
 } else {
     $ResolvedName = Get-ServerComputerName -Name $ServerName -IsIpAddress $IsIp
-    if ($ResolvedName) { $Candidates.Add("$ResolvedName\$User") }
-    $Candidates.Add("$Server\$User")            # IP or host \ user
-    $Candidates.Add($User)                      # bare account
+    if ($ResolvedName) {
+        $Candidates.Add("$ResolvedName\$User")
+    } else {
+        # An IP address is not a valid account authority; the bare local user is what 'net use' accepted on these servers.
+        $Candidates.Add($User)
+        Write-MountLog 'Could not discover the SMB computer name, using the bare user. Configure the matching smb_server_names entry if authentication fails.'
+    }
 }
 $Candidates = [string[]]($Candidates | Select-Object -Unique)
 Write-MountLog ("Account formats to try: " + ($Candidates -join ', '))
@@ -97,11 +100,6 @@ if (-not $Existing -and (Test-Path "$DriveLetter\")) {
     }
 }
 
-# Stale SYSTEM connections to this server with other credentials cause 1219/1312.
-# Only touches connections to the selected server, never other servers.
-& net.exe use "\\$Server" /delete /y 2>&1 | Out-Null
-& cmdkey.exe /delete:$Server 2>&1 | Out-Null
-
 # --- Mount with retries ------------------------------------------------------
 $LastFailure = 'No mapping attempt completed.'
 for ($Attempt = 1; $Attempt -le $Attempts; $Attempt++) {
@@ -115,6 +113,7 @@ for ($Attempt = 1; $Attempt -le $Attempts; $Attempt++) {
     }
 
     foreach ($Account in $Candidates) {
+        $CreatedMapping = $false
         try {
             $Mapping = Get-SmbGlobalMapping -ErrorAction Stop |
                 Where-Object { $_.LocalPath -eq $DriveLetter }
@@ -129,6 +128,7 @@ for ($Attempt = 1; $Attempt -le $Attempts; $Attempt++) {
             $Credential = New-Object System.Management.Automation.PSCredential ($Account, $SecurePassword)
             New-SmbGlobalMapping -RemotePath $SharePath -LocalPath $DriveLetter `
                 -Credential $Credential -Persistent $true -ErrorAction Stop | Out-Null
+            $CreatedMapping = $true
 
             $Verified = Get-SmbGlobalMapping -ErrorAction Stop |
                 Where-Object { $_.LocalPath -eq $DriveLetter -and $_.RemotePath -eq $SharePath -and $_.Status -eq 'OK' }
@@ -140,17 +140,21 @@ for ($Attempt = 1; $Attempt -le $Attempts; $Attempt++) {
         } catch {
             $LastFailure = "[$Account] $($_.Exception.Message) [$($_.FullyQualifiedErrorId)]"
             Write-MountLog "Global mount failed: $LastFailure"
-            Remove-SmbGlobalMapping -LocalPath $DriveLetter -Force -ErrorAction SilentlyContinue
+            if ($CreatedMapping) {
+                $FailedMapping = Get-SmbGlobalMapping -ErrorAction SilentlyContinue |
+                    Where-Object { $_.LocalPath -eq $DriveLetter -and $_.RemotePath -eq $SharePath }
+                if ($FailedMapping) {
+                    Remove-SmbGlobalMapping -LocalPath $DriveLetter -Force -ErrorAction SilentlyContinue
+                }
+            }
+            # Repeating a rejected identity can lock the account. Retry network
+            # availability, but stop on authentication/session or credential conflicts.
+            if ($_.FullyQualifiedErrorId -match '(^|\D)(86|1326|1330|1331|1909|1219|1312)(\D|$)') {
+                throw "SMB authentication/session setup failed for $Account. Verify the selected smb_server_names entry and server-side authentication logs. $LastFailure"
+            }
         }
     }
     if ($Attempt -lt $Attempts) { Start-Sleep -Seconds $WaitSeconds }
-}
-
-# --- Diagnostics: error 1312 hides the real reason; net use shows it ---------
-foreach ($Account in $Candidates) {
-    $Out = & net.exe use $SharePath $Password "/user:$Account" 2>&1 | Out-String
-    Write-MountLog "Diagnostic net use as '$Account': $($Out.Trim())"
-    & net.exe use $SharePath /delete /y 2>&1 | Out-Null
 }
 
 throw "Could not globally mount $SharePath as $DriveLetter after $Attempts attempts. Last error: $LastFailure"

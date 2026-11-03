@@ -188,6 +188,7 @@ module shared_workers {
     resource_group_id = local.resource_group_id
     ssh_keys = local.ssh_key_ids
     smb_share_paths = var.smb_share_path
+    smb_server_names = var.smb_server_names
     cloud_init_script = module.cloud_init_scripts.cloud_init_output
     vpc_id = local.workload_vpc_id
 }
