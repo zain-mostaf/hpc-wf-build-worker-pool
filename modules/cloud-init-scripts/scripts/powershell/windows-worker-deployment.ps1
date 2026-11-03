@@ -155,16 +155,47 @@ Function Mount-SmbDrive {
             if ($Reach.TcpTestSucceeded) {
                 $Mounted = $false
 
-                ### 1. Global mapping: works from the cloud-init (SYSTEM) context, visible to all sessions, persists after reboot
+                ### 1. Global mapping: visible to all sessions (RDP included) and persists after reboot.
+                ###    cloud-init runs in an impersonated session where New-SmbGlobalMapping fails with
+                ###    "A specified logon session does not exist", so it is executed as SYSTEM through a temporary scheduled task.
                 if (-not [String]::IsNullOrWhiteSpace($User) -and (Get-Command New-SmbGlobalMapping -ErrorAction SilentlyContinue)) {
+                    $TaskName = "MountSmbGlobalMapping"
+                    $TaskScript = "c:\symphony-deployment-scripts\mount-smb-global.ps1"
+                    $TaskResult = "c:\symphony-deployment-scripts\mount-smb-global.result"
                     try {
-                        $Cred = New-Object System.Management.Automation.PSCredential ($User, (ConvertTo-SecureString $Password -AsPlainText -Force))
-                        New-SmbGlobalMapping -RemotePath $SharePath -LocalPath $DriveLetter -Credential $Cred -Persistent $true -ErrorAction Stop | Out-Null
-                        $Mounted = $true
+                        $PassB64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($Password))
+                        $ScriptLines = @(
+                            "`$ErrorActionPreference = 'Stop'",
+                            "try {",
+                            "  `$Pass = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('$PassB64'))",
+                            "  `$Cred = New-Object System.Management.Automation.PSCredential ('$($User.Replace("'", "''"))', (ConvertTo-SecureString `$Pass -AsPlainText -Force))",
+                            "  New-SmbGlobalMapping -RemotePath '$($SharePath.Replace("'", "''"))' -LocalPath '$DriveLetter' -Credential `$Cred -Persistent `$true | Out-Null",
+                            "  'OK' | Set-Content '$TaskResult'",
+                            "} catch { ('FAILED: ' + `$_) | Set-Content '$TaskResult' }"
+                        )
+                        Set-Content -Path $TaskScript -Value $ScriptLines
+                        Remove-Item $TaskResult -Force -ErrorAction SilentlyContinue
+
+                        $Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$TaskScript`""
+                        $Principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+                        Register-ScheduledTask -TaskName $TaskName -Action $Action -Principal $Principal -Force | Out-Null
+                        Start-ScheduledTask -TaskName $TaskName
+
+                        for ($w = 0; $w -lt 30 -and -not (Test-Path $TaskResult); $w++) { Start-Sleep -Seconds 2 }
+                        $TaskOutput = if (Test-Path $TaskResult) { (Get-Content $TaskResult -Raw).Trim() } else { "no result (timeout)" }
+
                         $Mapping = Get-SmbGlobalMapping -ErrorAction SilentlyContinue | Where-Object { $_.LocalPath -eq $DriveLetter }
-                        Write-Log -Level Info "(Mount-SmbDrive) $SharePath mapped as $DriveLetter (New-SmbGlobalMapping), status: $($Mapping.Status), accessible: $(Test-Path $SharePath)"
+                        if ($TaskOutput -eq "OK" -and $Mapping) {
+                            $Mounted = $true
+                            Write-Log -Level Info "(Mount-SmbDrive) $SharePath mapped as $DriveLetter (New-SmbGlobalMapping as SYSTEM), status: $($Mapping.Status)"
+                        } else {
+                            Write-Log -Level Warn "(Mount-SmbDrive) New-SmbGlobalMapping as SYSTEM failed: $TaskOutput"
+                        }
                     } catch {
                         Write-Log -Level Warn "(Mount-SmbDrive) New-SmbGlobalMapping failed: $_"
+                    } finally {
+                        Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
+                        Remove-Item $TaskScript, $TaskResult -Force -ErrorAction SilentlyContinue
                     }
                 }
 
