@@ -103,9 +103,7 @@ Function Modify-ComputerName {
 
 <#
 ########################################################################
-# Mount an SMB share as a drive letter (net use)
-# Equivalent to: net use Z: \\server\share /user:<user> <password> /persistent:yes
-# but uses New-SmbGlobalMapping first, so the drive is visible to all sessions (cloud-init runs as SYSTEM)
+# Mount an SMB share globally so worker processes and interactive sessions can use it.
 ########################################################################
 #>
 Function Mount-SmbDrive {
@@ -127,23 +125,27 @@ Function Mount-SmbDrive {
 
     try {
         $DriveLetter = $DriveLetter.TrimEnd(':') + ':'
+        if ($DriveLetter -notmatch '^[A-Za-z]:$') { throw 'smb_drive_letter must be a single drive letter, for example Z:.' }
+        if ($SharePath -notmatch '^\\\\[^\\]+\\[^\\]+') { throw 'smb_share_path must be a UNC share path.' }
+        if (-not (Get-Command New-SmbGlobalMapping -ErrorAction SilentlyContinue)) {
+            throw 'This Windows image does not support New-SmbGlobalMapping.'
+        }
         $Server = ($SharePath.TrimStart('\') -split '\\')[0]
 
         ### Already mapped to the same share? (global mapping, visible to every session)
         $Existing = Get-SmbGlobalMapping -ErrorAction SilentlyContinue | Where-Object { $_.LocalPath -eq $DriveLetter }
         if ($Existing) {
-            if ($Existing.RemotePath -eq $SharePath) {
+            if ($Existing.RemotePath -eq $SharePath -and $Existing.Status -eq 'OK' -and (Test-Path "$DriveLetter\")) {
                 Write-Log -Level Info "(Mount-SmbDrive) $DriveLetter is already mapped to $SharePath, skipping"
                 return
             }
             Write-Log -Level Warn "(Mount-SmbDrive) $DriveLetter is mapped to $($Existing.RemotePath), removing it"
-            Remove-SmbGlobalMapping -LocalPath $DriveLetter -Force -ErrorAction SilentlyContinue
+            Remove-SmbGlobalMapping -LocalPath $DriveLetter -Force -ErrorAction Stop
         }
 
         ### Drive letter used by another volume (ex: CD-ROM)? Do not pretend it is mounted.
         if (Test-Path "$DriveLetter\") {
-            Write-Log -Level Error "(Mount-SmbDrive) Drive letter $DriveLetter is already used by another volume. Use a different smb_drive_letter."
-            return
+            throw "Drive letter $DriveLetter is already in use. Use a different smb_drive_letter or remove the previous session mapping."
         }
 
         for ($i = 1; $i -le $Attempts; $i++) {
@@ -156,9 +158,8 @@ Function Mount-SmbDrive {
                 $Mounted = $false
 
                 ### 1. Global mapping: visible to all sessions (RDP included) and persists after reboot.
-                ###    cloud-init runs in an impersonated session where New-SmbGlobalMapping fails with
-                ###    "A specified logon session does not exist", so it is executed as SYSTEM through a temporary scheduled task.
-                if (-not [String]::IsNullOrWhiteSpace($User) -and (Get-Command New-SmbGlobalMapping -ErrorAction SilentlyContinue)) {
+                ###    Use a separate SYSTEM logon session to avoid cloud-init token/session issues.
+                if (Get-Command New-SmbGlobalMapping -ErrorAction SilentlyContinue) {
                     $TaskName = "MountSmbGlobalMapping"
                     $TaskScript = "c:\symphony-deployment-scripts\mount-smb-global.ps1"
                     $TaskResult = "c:\symphony-deployment-scripts\mount-smb-global.result"
@@ -168,8 +169,10 @@ Function Mount-SmbDrive {
                             "`$ErrorActionPreference = 'Stop'",
                             "try {",
                             "  `$Pass = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('$PassB64'))",
-                            "  `$Cred = New-Object System.Management.Automation.PSCredential ('$($User.Replace("'", "''"))', (ConvertTo-SecureString `$Pass -AsPlainText -Force))",
-                            "  New-SmbGlobalMapping -RemotePath '$($SharePath.Replace("'", "''"))' -LocalPath '$DriveLetter' -Credential `$Cred -Persistent `$true | Out-Null",
+                            "  `$Parameters = @{ RemotePath = '$($SharePath.Replace("'", "''"))'; LocalPath = '$DriveLetter'; Persistent = `$true }",
+                            "  if ('$($User.Replace("'", "''"))' -ne '') { `$Parameters.Credential = New-Object System.Management.Automation.PSCredential ('$($User.Replace("'", "''"))', (ConvertTo-SecureString `$Pass -AsPlainText -Force)) }",
+                            "  New-SmbGlobalMapping @Parameters | Out-Null",
+                            "  if (-not (Test-Path '$DriveLetter\')) { throw 'Mapped share is not accessible from SYSTEM.' }",
                             "  'OK' | Set-Content '$TaskResult'",
                             "} catch { ('FAILED: ' + `$_) | Set-Content '$TaskResult' }"
                         )
@@ -185,7 +188,7 @@ Function Mount-SmbDrive {
                         $TaskOutput = if (Test-Path $TaskResult) { (Get-Content $TaskResult -Raw).Trim() } else { "no result (timeout)" }
 
                         $Mapping = Get-SmbGlobalMapping -ErrorAction SilentlyContinue | Where-Object { $_.LocalPath -eq $DriveLetter }
-                        if ($TaskOutput -eq "OK" -and $Mapping) {
+                        if ($TaskOutput -eq "OK" -and $Mapping.RemotePath -eq $SharePath -and $Mapping.Status -eq 'OK') {
                             $Mounted = $true
                             Write-Log -Level Info "(Mount-SmbDrive) $SharePath mapped as $DriveLetter (New-SmbGlobalMapping as SYSTEM), status: $($Mapping.Status)"
                         } else {
@@ -194,23 +197,9 @@ Function Mount-SmbDrive {
                     } catch {
                         Write-Log -Level Warn "(Mount-SmbDrive) New-SmbGlobalMapping failed: $_"
                     } finally {
+                        Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
                         Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
                         Remove-Item $TaskScript, $TaskResult -Force -ErrorAction SilentlyContinue
-                    }
-                }
-
-                ### 2. Fallback: net use (mapping is only visible to the current session)
-                if (-not $Mounted) {
-                    if ([String]::IsNullOrWhiteSpace($User)) {
-                        $Output = net use $DriveLetter $SharePath /persistent:yes 2>&1
-                    } else {
-                        $Output = net use $DriveLetter $SharePath "/user:$User" $Password /persistent:yes 2>&1
-                    }
-                    if ($LASTEXITCODE -eq 0) {
-                        $Mounted = $true
-                        Write-Log -Level Info "(Mount-SmbDrive) $SharePath mapped as $DriveLetter (net use)"
-                    } else {
-                        Write-Log -Level Warn "(Mount-SmbDrive) net use failed (exit $LASTEXITCODE): $(Out-String -InputObject $Output)"
                     }
                 }
 
@@ -220,9 +209,10 @@ Function Mount-SmbDrive {
             if ($i -lt $Attempts) { Start-Sleep -Seconds $WaitSeconds }
         }
 
-        Write-Log -Level Error "(Mount-SmbDrive) Could not mount $SharePath as $DriveLetter after $Attempts attempts"
+        throw "Could not mount $SharePath globally as $DriveLetter after $Attempts attempts"
     } catch {
         Write-Log -Level Error $_
+        throw
     }
 }
 
