@@ -138,7 +138,7 @@ variable smb_drive_letter {
 
 variable smb_user {
     default = ""
-    description = "(Optional) User used to connect to the SMB share (ex: DOMAIN\\user or user)."
+    description = "(Optional) SMB account for the global drive mapping. Bare local usernames are qualified with the selected SMB server; explicit DOMAIN\\user and user@domain values are preserved. Required with smb_password when smb_share_path is configured."
 }
 
 variable smb_password {

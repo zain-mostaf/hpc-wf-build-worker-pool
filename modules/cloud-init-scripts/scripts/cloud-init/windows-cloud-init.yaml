@@ -17,6 +17,9 @@ write_files:
  - path: c:\symphony-deployment-scripts\windows-worker-deployment.ps1.gz
    encoding: b64
    content: "${windows_worker_deployment_content}"
+ - path: c:\symphony-deployment-scripts\mountsmb.ps1.gz
+   encoding: b64
+   content: "${windows_mount_smb_content}"
  - path: c:\symphony-deployment-scripts\ego.conf.gz
    encoding: b64
    content: "${ego_conf_content}"
@@ -41,6 +44,7 @@ Content-Disposition: attachment; filename="shell-userdata"
 cd c:\symphony-deployment-scripts
 . c:\symphony-deployment-scripts\gunzip.ps1
 DeGZip-File c:\symphony-deployment-scripts\windows-worker-deployment.ps1.gz
+DeGZip-File c:\symphony-deployment-scripts\mountsmb.ps1.gz
 DeGZip-File c:\symphony-deployment-scripts\ego.conf.gz
 DeGZip-File c:\symphony-deployment-scripts\cacert.pem.gz
 DeGZip-File c:\symphony-deployment-scripts\windows-worker-postdeployment.ps1.gz

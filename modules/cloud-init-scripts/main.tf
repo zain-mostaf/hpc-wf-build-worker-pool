@@ -97,6 +97,7 @@ locals {
     cloud_init_windows = var.worker_os == "windows" ? templatefile("${path.module}/scripts/cloud-init/windows-cloud-init.yaml", {
        gunzip_content = base64encode(replace(file("${path.module}/scripts/powershell/gunzip.ps1"), "\n", "\r\n")),
        windows_worker_deployment_content = base64gzip(replace(file("${path.module}/scripts/powershell/windows-worker-deployment.ps1"), "\n", "\r\n")),
+       windows_mount_smb_content = base64gzip(file("${path.module}/scripts/powershell/mountsmb.ps1")),
        windows_worker_postdeployment_content = base64gzip(local.windows_post_deployment_tasks)
        ego_conf_content = base64gzip(replace(local.ego_conf_content, "\n", "\r\n")),
        cacert_pem_content = base64gzip(replace(local.ego_ssl_cacert, "\n", "\r\n")),
