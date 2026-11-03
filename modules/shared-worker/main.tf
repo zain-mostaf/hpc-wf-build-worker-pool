@@ -52,24 +52,30 @@ data ibm_is_image image_by_name {
     name = local.symphony_image_id
 }
 
-// One VNI per worker, created as its own resource and attached to the instance below.
+// Primary VNI (eth0): one per worker, created as its own resource and attached to the instance below.
 // auto_delete = true so IBM Cloud deletes the VNI together with the instance it is attached to.
-resource "ibm_is_virtual_network_interface" "worker" {
+resource "ibm_is_virtual_network_interface" "primary" {
 
-  for_each                  = local.machine_ip_name_mapping
-  name                      = "${each.value}-vni"
-  subnet                    = try(data.ibm_is_subnet.subnet_by_name[0].id, local.subnet_id_or_name)
-  security_groups           = local.security_groups
-  resource_group            = local.resource_group_id
-  allow_ip_spoofing         = false
-  enable_infrastructure_nat = true
-  auto_delete               = true
+  for_each = local.machine_ip_name_mapping
+
+  name = "${each.value}-eth0-vni"
+
+  subnet = try(data.ibm_is_subnet.subnet_by_name[0].id, local.subnet_id_or_name)
+
+  security_groups = local.security_groups
 
   primary_ip {
     address     = each.key
     auto_delete = true
-    name        = "${each.value}-eth0"
   }
+
+  allow_ip_spoofing         = false
+  enable_infrastructure_nat = true
+  auto_delete               = true
+
+  resource_group = local.resource_group_id
+
+  tags = local.tags
 }
 
 resource "ibm_is_instance" "worker" {
@@ -89,10 +95,10 @@ resource "ibm_is_instance" "worker" {
     enabled = true
   }
   primary_network_attachment {
-    name = "eth0"
+    name = "${each.value}-eth0-attachment"
 
     virtual_network_interface {
-      id = ibm_is_virtual_network_interface.worker[each.key].id
+      id = ibm_is_virtual_network_interface.primary[each.key].id
     }
   }
   
