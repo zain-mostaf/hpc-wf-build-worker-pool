@@ -6,7 +6,6 @@
 #   -SharePath   \\10.136.64.26\wf_scale_share
 #   -User        smb_user       (bare local account, e.g. wfuser)
 #   -Password    smb_password
-#   -ServerName  selected entry from smb_server_names (actual SMB account authority)
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
@@ -15,7 +14,6 @@ param(
     [string]$DriveLetter = 'Z:',
     [string]$User,
     [string]$Password,
-    [string]$ServerName,
     [ValidateRange(1, 20)]
     [int]$Attempts = 5,
     [ValidateRange(0, 300)]
@@ -42,40 +40,8 @@ if ([string]::IsNullOrWhiteSpace($User) -or [string]::IsNullOrEmpty($Password)) 
 
 $Server = ($SharePath.TrimStart('\') -split '\\')[0]
 $User = $User.Trim()
-$IsIp = $Server -match '^\d{1,3}(\.\d{1,3}){3}$'
-
-# --- Build the list of account formats to try -------------------------------
-# Use one qualified identity. Explicit server names avoid relying on discovery.
-function Get-ServerComputerName {
-    param([string]$Name, [bool]$IsIpAddress)
-    if (-not [string]::IsNullOrWhiteSpace($Name)) { return $Name.Trim().Split('.')[0] }
-    if (-not $IsIpAddress) { return $Server.Split('.')[0] }
-    try {   # reverse DNS
-        $h = [System.Net.Dns]::GetHostEntry($Server).HostName
-        if ($h) { return $h.Split('.')[0] }
-    } catch { }
-    try {   # NetBIOS name table
-        $line = nbtstat -A $Server 2>$null | Where-Object { $_ -match '<00>\s+UNIQUE' } | Select-Object -First 1
-        if ($line) { return ($line.Trim() -split '\s+')[0] }
-    } catch { }
-    return $null
-}
-
-$Candidates = New-Object System.Collections.Generic.List[string]
-if ($User -match '[\\@]') {
-    $Candidates.Add($User)                      # caller gave a qualified name: use as-is
-} else {
-    $ResolvedName = Get-ServerComputerName -Name $ServerName -IsIpAddress $IsIp
-    if ($ResolvedName) {
-        $Candidates.Add("$ResolvedName\$User")
-    } else {
-        # An IP address is not a valid account authority; the bare local user is what 'net use' accepted on these servers.
-        $Candidates.Add($User)
-        Write-MountLog 'Could not discover the SMB computer name, using the bare user. Configure the matching smb_server_names entry if authentication fails.'
-    }
-}
-$Candidates = [string[]]($Candidates | Select-Object -Unique)
-Write-MountLog ("Account formats to try: " + ($Candidates -join ', '))
+$Candidates = @($User)
+Write-MountLog "Using configured SMB account $User without hostname discovery"
 
 $SecurePassword = ConvertTo-SecureString $Password -AsPlainText -Force
 
@@ -150,7 +116,7 @@ for ($Attempt = 1; $Attempt -le $Attempts; $Attempt++) {
             # Repeating a rejected identity can lock the account. Retry network
             # availability, but stop on authentication/session or credential conflicts.
             if ($_.FullyQualifiedErrorId -match '(^|\D)(86|1326|1330|1331|1909|1219|1312)(\D|$)') {
-                throw "SMB authentication/session setup failed for $Account. Verify the selected smb_server_names entry and server-side authentication logs. $LastFailure"
+                throw "SMB authentication/session setup failed for $Account. Verify the configured SMB account and server-side authentication logs. $LastFailure"
             }
         }
     }

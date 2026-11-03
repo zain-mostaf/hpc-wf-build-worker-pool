@@ -136,15 +136,9 @@ variable smb_drive_letter {
     description = "(Optional) Drive letter used to mount the SMB share on Windows workers."
 }
 
-variable "smb_server_names" {
-    type        = list(string)
-    default     = []
-    description = "Optional SMB server computer names in the same order as smb_share_path. Use actual server names, not example names. When supplied, the list must match the share list length."
-}
-
 variable smb_user {
     default = ""
-    description = "(Optional) SMB account for the global drive mapping. Bare local usernames are qualified with the selected SMB server; explicit DOMAIN\\user and user@domain values are preserved. Required with smb_password when smb_share_path is configured."
+    description = "(Optional) SMB account for the global drive mapping. Usernames are passed unchanged; explicit DOMAIN\\user and user@domain values are preserved. Required with smb_password when smb_share_path is configured."
 }
 
 variable smb_password {

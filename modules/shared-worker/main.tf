@@ -40,10 +40,6 @@ locals {
             replace(local.smb_share_paths[local.smb_index_by_worker[ip]], "'", "''")
         )
     }
-    smb_server_name_by_worker = {
-        for ip, name in local.machine_ip_name_mapping : ip =>
-            replace(try(var.smb_server_names[local.smb_index_by_worker[ip]], ""), "'", "''")
-    }
 }
 
 data ibm_is_subnet subnet_by_name {
@@ -86,7 +82,7 @@ resource "ibm_is_instance" "worker" {
   zone           = local.zone
   keys           = local.ssh_keys
   resource_group = local.resource_group_id
-  user_data      = replace(replace(replace(local.cloud_init_script, "__COMPUTERNAME__", each.value), "__SMBSHARE__", local.smb_share_by_worker[each.key]), "__SMBSERVERNAME__", local.smb_server_name_by_worker[each.key])
+  user_data      = replace(replace(local.cloud_init_script, "__COMPUTERNAME__", each.value), "__SMBSHARE__", local.smb_share_by_worker[each.key])
 
   tags           = concat(local.tags, ["role:symphony-worker"])
   metadata_service {
@@ -102,10 +98,6 @@ resource "ibm_is_instance" "worker" {
   
   lifecycle {
       ignore_changes = [ user_data, tags, image ]
-      precondition {
-          condition     = length(var.smb_server_names) == 0 || length(var.smb_server_names) == length(var.smb_share_paths)
-          error_message = "smb_server_names must be empty or contain one computer name per smb_share_path entry, in the same order."
-      }
   }
 
  

@@ -124,9 +124,7 @@ Function Mount-SmbDriveAsSystem {
         [Parameter(Mandatory = $false)]
             [string]$User,
         [Parameter(Mandatory = $false)]
-            [string]$Password,
-        [Parameter(Mandatory = $false)]
-            [string]$ServerName
+            [string]$Password
       )
 
     $Folder = "c:\symphony-deployment-scripts"
@@ -141,7 +139,7 @@ Function Mount-SmbDriveAsSystem {
             "`$ErrorActionPreference = 'Stop'",
             "try {",
             "  `$Pass = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('$PassB64'))",
-            "  & '$Folder\mountsmb.ps1' -SharePath $(ConvertTo-PsLiteral $SharePath) -DriveLetter $(ConvertTo-PsLiteral $DriveLetter) -User $(ConvertTo-PsLiteral $User) -Password `$Pass -ServerName $(ConvertTo-PsLiteral $ServerName) *>&1 | Out-File '$TaskLog' -Append -Encoding ascii",
+            "  & '$Folder\mountsmb.ps1' -SharePath $(ConvertTo-PsLiteral $SharePath) -DriveLetter $(ConvertTo-PsLiteral $DriveLetter) -User $(ConvertTo-PsLiteral $User) -Password `$Pass *>&1 | Out-File '$TaskLog' -Append -Encoding ascii",
             "  'OK' | Set-Content '$ResultFile'",
             "} catch {",
             "  ('FAILED: ' + `$_) | Out-File '$TaskLog' -Append -Encoding ascii",
@@ -279,8 +277,6 @@ Function Deploy-Worker {
         [Parameter(Mandatory = $false)]
             [string]$SmbDriveLetter,   # (Optional) Drive letter for the SMB share (default Z:)
         [Parameter(Mandatory = $false)]
-            [string]$SmbServerName,    # Local account authority for the selected SMB server
-        [Parameter(Mandatory = $false)]
             [string]$SmbUser,          # (Optional) User to connect to the SMB share
         [Parameter(Mandatory = $false)]
             [string]$SmbPassword,      # (Optional) Base64-encoded password of the SMB user
@@ -322,7 +318,7 @@ Function Deploy-Worker {
             if (![String]::IsNullOrWhiteSpace($SmbPassword)) {
                 $DecodedSmbPass = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($SmbPassword))
             }
-            Mount-SmbDriveAsSystem -SharePath $SmbSharePath -DriveLetter $SmbDriveLetter -User $SmbUser -Password $DecodedSmbPass -ServerName $SmbServerName
+            Mount-SmbDriveAsSystem -SharePath $SmbSharePath -DriveLetter $SmbDriveLetter -User $SmbUser -Password $DecodedSmbPass
         }
 
         ### Symphony setup will be skipped if flag is true

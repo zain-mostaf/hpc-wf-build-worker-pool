@@ -50,11 +50,6 @@ variable cloud_init_script {
 
 }
 
-variable "smb_server_names" {
-    type    = list(string)
-    default = []
-}
-
 variable smb_share_paths {
     type=list(string)
     default=[]

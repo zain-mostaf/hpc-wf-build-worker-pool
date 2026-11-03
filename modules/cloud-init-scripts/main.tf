@@ -110,7 +110,6 @@ locals {
             "-SymphonyPass ${local.template_data.symphony_password}",
             "-SSLPort ${local.template_data.ego_ssl_setup == "true" ? local.template_data.ego_ssl_port : "NO_SSL"}",
             "-SmbSharePath '__SMBSHARE__'",
-            "-SmbServerName '__SMBSERVERNAME__'",
             "-SmbDriveLetter '${replace(var.smb_drive_letter, "'", "''")}'",
             "-SmbUser '${replace(var.smb_user, "'", "''")}'",
             "-SmbPassword '${base64encode(var.smb_password)}'",
