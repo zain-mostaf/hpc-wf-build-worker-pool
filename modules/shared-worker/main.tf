@@ -53,7 +53,9 @@ data ibm_is_image image_by_name {
 }
 
 // Primary VNI (eth0): one per worker, created as its own resource and attached to the instance below.
-// auto_delete = true so IBM Cloud deletes the VNI together with the instance it is attached to.
+// IBM Cloud requires auto_delete = false for a VNI that is created unbound (before it is attached to the instance).
+// Terraform destroys the instance first and then this VNI (the instance depends on it), so the VNI is
+// removed together with the VSI whenever the worker is deleted through Terraform.
 resource "ibm_is_virtual_network_interface" "primary" {
 
   for_each = local.machine_ip_name_mapping
@@ -71,7 +73,7 @@ resource "ibm_is_virtual_network_interface" "primary" {
 
   allow_ip_spoofing         = false
   enable_infrastructure_nat = true
-  auto_delete               = true
+  auto_delete               = false
 
   resource_group = local.resource_group_id
 
