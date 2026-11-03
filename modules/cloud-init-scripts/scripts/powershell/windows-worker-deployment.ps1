@@ -108,6 +108,8 @@ Function Modify-ComputerName {
 # "A specified logon session does not exist" (error 1312), so mountsmb.ps1 is executed as SYSTEM
 # through a temporary scheduled task. The global mapping is then visible to every session (RDP included)
 # and persists after reboot. A mount failure is logged but does not stop the worker deployment.
+# If the mount is not confirmed, the task MountSmbAtStartup is registered: it runs mountsmb.ps1 as SYSTEM
+# at every startup (30 seconds delay) and every 5 minutes during the first hour, until the share is mapped.
 ########################################################################
 #>
 Function ConvertTo-PsLiteral([string]$Value) {
@@ -167,7 +169,30 @@ Function Mount-SmbDriveAsSystem {
         if ($TaskOutput -eq "OK" -and $Mapping) {
             Write-Log -Level Info "(Mount-SmbDriveAsSystem) $($Mapping.RemotePath) mapped as $DriveLetter, status: $($Mapping.Status)"
         } else {
-            Write-Log -Level Error "(Mount-SmbDriveAsSystem) Could not mount $SharePath as ${DriveLetter} - $TaskOutput"
+            Write-Log -Level Warn "(Mount-SmbDriveAsSystem) Could not mount $SharePath as ${DriveLetter} now - $TaskOutput"
+
+            ### Retry as SYSTEM at every startup and every 5 minutes during the first hour (no login needed)
+            $StartupTaskName = "MountSmbAtStartup"
+            $StartupScript = "$Folder\mountsmb-startup.ps1"
+            $StartupLog = "$Folder\mountsmb-startup.log"
+            $StartupLines = @(
+                "try {",
+                "  `$Pass = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('$PassB64'))",
+                "  & '$Folder\mountsmb.ps1' -SharePath $(ConvertTo-PsLiteral $SharePath) -DriveLetter $(ConvertTo-PsLiteral $DriveLetter) -User $(ConvertTo-PsLiteral $User) -Password `$Pass -Attempts 20 -WaitSeconds 15 *>&1 | Out-File '$StartupLog' -Append -Encoding ascii",
+                "} catch {",
+                "  ((Get-Date -Format 'yyyy/MM/dd HH:mm:ss') + ' FAILED: ' + `$_) | Out-File '$StartupLog' -Append -Encoding ascii",
+                "}"
+            )
+            Set-Content -Path $StartupScript -Value $StartupLines
+
+            $StartupAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$StartupScript`""
+            $AtStartup = New-ScheduledTaskTrigger -AtStartup
+            $AtStartup.Delay = "PT30S"
+            $Repeat = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(2) -RepetitionInterval (New-TimeSpan -Minutes 5) -RepetitionDuration (New-TimeSpan -Hours 1)
+            $StartupSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 30)
+            $StartupPrincipal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+            Register-ScheduledTask -TaskName $StartupTaskName -Action $StartupAction -Trigger @($AtStartup, $Repeat) -Settings $StartupSettings -Principal $StartupPrincipal -Force | Out-Null
+            Write-Log -Level Info "(Mount-SmbDriveAsSystem) Registered scheduled task $StartupTaskName (SYSTEM, at startup and every 5 minutes for 1 hour). Its output is in $StartupLog"
         }
     } catch {
         Write-Log -Level Error "(Mount-SmbDriveAsSystem) $_"

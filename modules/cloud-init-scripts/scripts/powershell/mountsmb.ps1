@@ -40,8 +40,20 @@ if ([string]::IsNullOrWhiteSpace($User) -or [string]::IsNullOrEmpty($Password)) 
 
 $Server = ($SharePath.TrimStart('\') -split '\\')[0]
 $User = $User.Trim()
-$Candidates = @($User)
-Write-MountLog "Using configured SMB account $User without hostname discovery"
+
+# New-SmbGlobalMapping rejects an unqualified user name with error 1312 ("A specified logon session does not exist")
+# on the client, before any request reaches the server (net use accepts it, global mapping does not).
+# A user given as DOMAIN\user or user@domain is used as-is; a bare user is tried in qualified forms first.
+$Candidates = New-Object System.Collections.Generic.List[string]
+if ($User -match '[\\@]') {
+    $Candidates.Add($User)
+} else {
+    # The share is reached through a VIP (no usable server name): use the address/name from the share path.
+    $Candidates.Add("$Server\$User")
+    $Candidates.Add($User)
+}
+$Candidates = [string[]]($Candidates | Select-Object -Unique)
+Write-MountLog ("Account formats to try: " + ($Candidates -join ', '))
 
 $SecurePassword = ConvertTo-SecureString $Password -AsPlainText -Force
 
@@ -113,10 +125,10 @@ for ($Attempt = 1; $Attempt -le $Attempts; $Attempt++) {
                     Remove-SmbGlobalMapping -LocalPath $DriveLetter -Force -ErrorAction SilentlyContinue
                 }
             }
-            # Repeating a rejected identity can lock the account. Retry network
-            # availability, but stop on authentication/session or credential conflicts.
-            if ($_.FullyQualifiedErrorId -match '(^|\D)(86|1326|1330|1331|1909|1219|1312)(\D|$)') {
-                throw "SMB authentication/session setup failed for $Account. Verify the configured SMB account and server-side authentication logs. $LastFailure"
+            # Error 1312 is raised on the client for an unusable account format: try the next format.
+            # Repeating an identity rejected by the server can lock the account, so stop on those errors.
+            if ($_.FullyQualifiedErrorId -match '(^|\D)(86|1326|1330|1331|1909|1219)(\D|$)') {
+                throw "SMB authentication failed for $Account. Verify smb_user and smb_password and the server-side authentication logs. $LastFailure"
             }
         }
     }
