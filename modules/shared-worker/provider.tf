@@ -16,5 +16,9 @@ terraform {
       source  = "IBM-Cloud/ibm"
       version = ">= 1.70.0"
     }
+    shell = {
+      source  = "scottwinkler/shell"
+      version = "1.7.10"
+    }
   }
 }

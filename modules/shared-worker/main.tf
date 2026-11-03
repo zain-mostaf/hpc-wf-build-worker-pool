@@ -24,6 +24,7 @@ locals {
     cloud_init_script = var.cloud_init_script
     tags = var.worker_tags
     boot_volume_size = 100
+    region = "${split("-", var.zone)[0]}-${split("-", var.zone)[1]}"
 
     // Odd worker numbers (ex: -0001) use smb_share_paths[0], even numbers (ex: -0002) use smb_share_paths[1].
     // With a single entry every worker uses it; with no entries nothing is mounted.
@@ -54,8 +55,9 @@ data ibm_is_image image_by_name {
 
 // Primary VNI (eth0): one per worker, created as its own resource and attached to the instance below.
 // IBM Cloud requires auto_delete = false for a VNI that is created unbound (before it is attached to the instance).
-// Terraform destroys the instance first and then this VNI (the instance depends on it), so the VNI is
-// removed together with the VSI whenever the worker is deleted through Terraform.
+// Once the VNI is attached, the shell_script.vni_auto_delete resource below sets auto_delete = true on it, so IBM Cloud
+// deletes the VNI together with the VSI (also when the VSI is deleted from the console or CLI). That change is made
+// outside the provider, hence ignore_changes on auto_delete (otherwise Terraform would set it back to false).
 resource "ibm_is_virtual_network_interface" "primary" {
 
   for_each = local.machine_ip_name_mapping
@@ -78,6 +80,10 @@ resource "ibm_is_virtual_network_interface" "primary" {
   resource_group = local.resource_group_id
 
   tags = local.tags
+
+  lifecycle {
+    ignore_changes = [auto_delete]
+  }
 }
 
 resource "ibm_is_instance" "worker" {
@@ -115,4 +121,24 @@ resource "ibm_is_instance" "worker" {
   }
   
 
+}
+
+// Sets auto_delete = true on every VNI once it is attached to its VSI (see the comment on the VNI resource).
+// Destroy order: this resource, then the instance, then the VNI. If IBM Cloud has already removed the VNI together with
+// the instance, destroying the VNI resource finds it gone.
+resource "shell_script" "vni_auto_delete" {
+
+  for_each = local.machine_ip_name_mapping
+
+  lifecycle_commands {
+    create = "tr -d '\\r' < '${path.module}/setVniAutoDelete.sh' | /bin/bash -s -- '${local.region}' '${ibm_is_virtual_network_interface.primary[each.key].id}'"
+    update = "tr -d '\\r' < '${path.module}/setVniAutoDelete.sh' | /bin/bash -s -- '${local.region}' '${ibm_is_virtual_network_interface.primary[each.key].id}'"
+    delete = "true"
+  }
+
+  // Run again if the VSI or the VNI is replaced, and only after the VSI exists (the VNI is attached to it).
+  environment = {
+    INSTANCE_ID = ibm_is_instance.worker[each.key].id
+    VNI_ID      = ibm_is_virtual_network_interface.primary[each.key].id
+  }
 }

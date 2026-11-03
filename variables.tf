@@ -33,6 +33,17 @@ variable worker_pool_subnet_segmentation {
     description = "List of CIDRs to be used for worker IP assignment. It will limit the number of available spots for this worker pool."
 }
 
+variable start_ip_offset {
+    type=number
+    default=0
+    description="(Optional) Number of IP addresses to skip at the beginning of worker_pool_subnet_segmentation before the first worker is assigned. With worker_pool_subnet_segmentation = [\"10.136.64.64/26\"] and start_ip_offset = 6, the first worker gets 10.136.64.70 (offset 0 would be 10.136.64.64, the network address). With several segments the offset counts across them in list order. Default 0 starts at the first address."
+
+    validation {
+        condition = var.start_ip_offset >= 0 && var.start_ip_offset == floor(var.start_ip_offset)
+        error_message = "start_ip_offset must be a whole number greater than or equal to 0."
+    }
+}
+
 variable worker_pool_size {
     type=number
     description="Quantity of workers to be provisioned into this worker pool. Maximum allowed is 512 workers."

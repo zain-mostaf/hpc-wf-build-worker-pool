@@ -210,6 +210,8 @@ Function Mount-SmbDriveAsSystem {
 #  - enables SMB Multichannel on the SMB client
 #  - activates the High performance power plan
 #  - sets LanmanWorkstation MaxCmds to 2048 (needs a reboot / workstation restart to take effect)
+#  - disables SMB client security signing
+#  - sets the TCP receive window auto-tuning level to experimental
 ########################################################################
 #>
 Function Set-SmbPerformanceTuning {
@@ -234,6 +236,13 @@ Function Set-SmbPerformanceTuning {
 
         Write-Log -Level Info "(Set-SmbPerformanceTuning) Setting LanmanWorkstation MaxCmds to 2048"
         Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters" -Name "MaxCmds" -Value 2048 -Force
+
+        Write-Log -Level Info "(Set-SmbPerformanceTuning) Disabling SMB client security signing"
+        Set-SmbClientConfiguration -EnableSecuritySignature $false -Confirm:$false
+
+        Write-Log -Level Info "(Set-SmbPerformanceTuning) Setting TCP auto-tuning level to experimental"
+        $NetshOutput = netsh int tcp set global autotuninglevel=experimental 2>&1
+        Write-Log -Level Info (Out-String -InputObject $NetshOutput).Trim()
     } catch {
         Write-Log -Level Error $_
     }
