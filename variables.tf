@@ -126,8 +126,9 @@ variable security_groups {
 }
 
 variable smb_share_path {
-    default = ""
-    description = "(Optional) UNC path of an SMB share to mount on Windows workers (ex: \\\\server\\share). If omitted, nothing is mounted."
+    type = list(string)
+    default = []
+    description = "(Optional) List of UNC paths of SMB shares to mount on Windows workers (ex: [\"\\\\\\\\smb-1\\\\share\", \"\\\\\\\\smb-2\\\\share\"]). Workers with an odd number (ex: -0001) use the 1st entry, workers with an even number (ex: -0002) use the 2nd entry. With a single entry, all workers use it. If empty, nothing is mounted."
 }
 
 variable smb_drive_letter {

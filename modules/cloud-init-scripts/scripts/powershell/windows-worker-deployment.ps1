@@ -26,7 +26,9 @@ Function Write-Log {
     $LevelValue = @{Error = "Error"; Warn = "Warning"; Info = "Information"}[$Level]
     $LogFile = "$HOME\Desktop\WindowsWorker.log"
     $Stamp = (Get-Date).toString("yyyy/MM/dd HH:mm:ss")
-    Add-Content $LogFile -Value "$Stamp $LevelValue $Message"
+    ### The Desktop folder may not exist for the cloud-init user profile, so the log is also kept in the deployment folder
+    Add-Content $LogFile -Value "$Stamp $LevelValue $Message" -ErrorAction SilentlyContinue
+    Add-Content "c:\symphony-deployment-scripts\WindowsWorker.log" -Value "$Stamp $LevelValue $Message" -ErrorAction SilentlyContinue
 }
 
 
@@ -42,7 +44,17 @@ Function RegisterPassword-ForWindowsExecutionUser($SymphonyPass) {
             Start-Service -Name "LIM"
         }
 
-        egosh user logon -u Admin -x $SymphonyPass
+        ### LIM may not be able to contact the primary host right after start (DNS/network), retry the logon
+        $LoggedOn = $false
+        for ($i = 1; $i -le 10 -and -not $LoggedOn; $i++) {
+            egosh user logon -u Admin -x $SymphonyPass
+            if ($LASTEXITCODE -eq 0) {
+                $LoggedOn = $true
+            } else {
+                Write-Log -Level Warn "(RegisterPassword-ForWindowsExecutionUser) egosh logon failed (attempt $i of 10), retrying in 15 seconds"
+                Start-Sleep -Seconds 15
+            }
+        }
 
         Write-Log -Level Info "(RegisterPassword-ForWindowsExecutionUser) Registering Password for windows execution user"
 
@@ -149,7 +161,8 @@ Function Mount-SmbDrive {
                         $Cred = New-Object System.Management.Automation.PSCredential ($User, (ConvertTo-SecureString $Password -AsPlainText -Force))
                         New-SmbGlobalMapping -RemotePath $SharePath -LocalPath $DriveLetter -Credential $Cred -Persistent $true -ErrorAction Stop | Out-Null
                         $Mounted = $true
-                        Write-Log -Level Info "(Mount-SmbDrive) $SharePath mapped as $DriveLetter (New-SmbGlobalMapping)"
+                        $Mapping = Get-SmbGlobalMapping -ErrorAction SilentlyContinue | Where-Object { $_.LocalPath -eq $DriveLetter }
+                        Write-Log -Level Info "(Mount-SmbDrive) $SharePath mapped as $DriveLetter (New-SmbGlobalMapping), status: $($Mapping.Status), accessible: $(Test-Path $SharePath)"
                     } catch {
                         Write-Log -Level Warn "(Mount-SmbDrive) New-SmbGlobalMapping failed: $_"
                     }
@@ -241,7 +254,7 @@ Function Close-Resource {
             egosh resource close "$Hostname"
             break
         } else {
-            $NumAttemps++
+            $NumAttempts++
             Start-Sleep -Seconds 10
         }
     }

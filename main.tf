@@ -163,7 +163,6 @@ module cloud_init_scripts {
     additional_resource_tag=""
     ego_master_list=local.symphony_master_names
     ego_ssl_cacert=local.ego_ssl_cacert
-    smb_share_path=var.smb_share_path
     smb_drive_letter=var.smb_drive_letter
     smb_user=var.smb_user
     smb_password=var.smb_password
@@ -188,6 +187,7 @@ module shared_workers {
     subnet_id_or_name = local.symphony_subnet_id
     resource_group_id = local.resource_group_id
     ssh_keys = local.ssh_key_ids
+    smb_share_paths = var.smb_share_path
     cloud_init_script = module.cloud_init_scripts.cloud_init_output
     vpc_id = local.workload_vpc_id
 }

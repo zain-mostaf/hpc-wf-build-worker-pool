@@ -58,10 +58,6 @@ variable worker_attributes {
    }
 }
 
-variable smb_share_path {
-   default = ""
-}
-
 variable smb_drive_letter {
    default = "Z:"
 }

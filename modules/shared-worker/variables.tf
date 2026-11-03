@@ -50,6 +50,11 @@ variable cloud_init_script {
 
 }
 
+variable smb_share_paths {
+    type=list(string)
+    default=[]
+}
+
 variable vpc_id {
 
 }

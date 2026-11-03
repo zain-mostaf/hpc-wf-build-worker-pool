@@ -24,6 +24,16 @@ locals {
     cloud_init_script = var.cloud_init_script
     tags = var.worker_tags
     boot_volume_size = 100
+
+    // Odd worker numbers (ex: -0001) use smb_share_paths[0], even numbers (ex: -0002) use smb_share_paths[1].
+    // With a single entry every worker uses it; with no entries nothing is mounted.
+    smb_share_paths = var.smb_share_paths
+    smb_share_by_worker = {
+        for ip, name in var.machine_ip_name_mapping : ip => (
+            length(local.smb_share_paths) == 0 ? "" :
+            replace(local.smb_share_paths[(parseint(regex("\\d+$", name), 10) % 2 == 1 ? 0 : 1) % length(local.smb_share_paths)], "'", "''")
+        )
+    }
 }
 
 data ibm_is_subnet subnet_by_name {
@@ -66,7 +76,7 @@ resource "ibm_is_instance" "worker" {
   zone           = local.zone
   keys           = local.ssh_keys
   resource_group = local.resource_group_id
-  user_data      = replace(local.cloud_init_script, "__COMPUTERNAME__", each.value)
+  user_data      = replace(replace(local.cloud_init_script, "__COMPUTERNAME__", each.value), "__SMBSHARE__", local.smb_share_by_worker[each.key])
 
   tags           = concat(local.tags, ["role:symphony-worker"])
   metadata_service {

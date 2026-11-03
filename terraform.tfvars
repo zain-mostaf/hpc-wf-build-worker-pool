@@ -21,7 +21,8 @@ ego_base_port = 7869
 ego_ssl_setup = false   # false gives -SSLPort NO_SSL
 
 # --- SMB share mounted on Windows workers (net use Z: \\server\share /user:<user> <password>) ---
-smb_share_path   = "\\\\<server>\\<share>"   # leave empty to skip mounting
+# Odd worker numbers (-0001, -0003, ...) use the 1st entry, even numbers (-0002, -0004, ...) use the 2nd entry.
+smb_share_path   = ["\\\\<smb-1>\\<share>", "\\\\<smb-2>\\<share>"]   # leave empty ([]) to skip mounting
 smb_drive_letter = "Z:"
 smb_user         = "<smb-user>"
 smb_password     = "<smb-password>"          # better as a sensitive Schematics variable
