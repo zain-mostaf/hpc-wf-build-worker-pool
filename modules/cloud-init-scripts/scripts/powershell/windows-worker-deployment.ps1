@@ -212,6 +212,8 @@ Function Mount-SmbDriveAsSystem {
 #  - sets LanmanWorkstation MaxCmds to 2048 (needs a reboot / workstation restart to take effect)
 #  - disables SMB client security signing
 #  - sets the TCP receive window auto-tuning level to experimental
+#  - ensures Receive Side Scaling (RSS) is enabled
+#  - sets LanmanServer AsynchronousCredits and MaxCredits to 2048
 ########################################################################
 #>
 Function Set-SmbPerformanceTuning {
@@ -243,6 +245,16 @@ Function Set-SmbPerformanceTuning {
         Write-Log -Level Info "(Set-SmbPerformanceTuning) Setting TCP auto-tuning level to experimental"
         $NetshOutput = netsh int tcp set global autotuninglevel=experimental 2>&1
         Write-Log -Level Info (Out-String -InputObject $NetshOutput).Trim()
+
+        Write-Log -Level Info "(Set-SmbPerformanceTuning) Ensuring Receive Side Scaling (RSS) is enabled"
+        $NetshOutput = netsh interface tcp set global rss=enabled 2>&1
+        Write-Log -Level Info (Out-String -InputObject $NetshOutput).Trim()
+
+        Write-Log -Level Info "(Set-SmbPerformanceTuning) Setting LanmanServer AsynchronousCredits to 2048"
+        Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Services\LanmanServer\Parameters" -Name "AsynchronousCredits" -Value 2048 -Force
+
+        Write-Log -Level Info "(Set-SmbPerformanceTuning) Setting LanmanServer MaxCredits to 2048"
+        Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Services\LanmanServer\Parameters" -Name "MaxCredits" -Value 2048 -Force
     } catch {
         Write-Log -Level Error $_
     }
